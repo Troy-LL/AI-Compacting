@@ -1,4 +1,3 @@
-"""
 H(AI)LP — Architecture Comparison: Baseline GPT vs LifeLink RWKV
 
 Two 50M-parameter language models trained on the same data, differing only in architecture.
@@ -64,4 +63,4 @@ uv run python demo/compare.py
 | Attention projections | Full rank W              | Rank-64 U @ V^T         |
 | State representation | KV cache (grows)         | Fixed h_state tensor     |
 | Parameters           | ~50M                      | ~50M                     |
-"""
+
