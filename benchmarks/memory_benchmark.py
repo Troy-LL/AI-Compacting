@@ -147,15 +147,15 @@ def main() -> None:
     # Validation assertion — the whole point
     hailp_bytes = [r["total_memory_bytes"] for r in hailp_results]
     assert all(b == hailp_bytes[0] for b in hailp_bytes), (
-        "❌ FAIL: H(AI)LP state is NOT constant across sequence lengths!"
+        "FAIL: H(AI)LP state is NOT constant across sequence lengths!"
     )
-    print("✓ PASS: H(AI)LP state is constant across all sequence lengths.")
+    print("PASS: H(AI)LP state is constant across all sequence lengths.")
 
     baseline_bytes = [r["total_memory_bytes"] for r in baseline_results]
     assert baseline_bytes[-1] > baseline_bytes[0], (
-        "❌ FAIL: Baseline KV cache did not grow!"
+        "FAIL: Baseline KV cache did not grow!"
     )
-    print("✓ PASS: Baseline KV cache grows with sequence length.")
+    print("PASS: Baseline KV cache grows with sequence length.")
 
 
 if __name__ == "__main__":

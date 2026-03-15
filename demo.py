@@ -75,7 +75,7 @@ SEQ_LENS = [64, 128, 256, 512]
 BATCH = 2
 
 
-def divider(char: str = "─", width: int = 70) -> None:
+def divider(char: str = "-", width: int = 70) -> None:
     print(char * width)
 
 
@@ -85,9 +85,9 @@ def section(n: int, title: str) -> None:
 
 def run_demo() -> None:
     print()
-    divider("═")
+    divider("=")
     print("H(AI)LP: Demonstrating Fixed-Memory LLM Architecture")
-    divider("═")
+    divider("=")
 
     print("\nLoading models (this may take a few seconds)...")
     baseline = BaselineGPT(BASELINE_CFG)
@@ -104,12 +104,12 @@ def run_demo() -> None:
 
     with torch.no_grad():
         b_logits = baseline(tokens)
-    print(f"  Baseline GPT  : input {tuple(tokens.shape)} → logits {tuple(b_logits.shape)} ✓")
+    print(f"  Baseline GPT  : input {tuple(tokens.shape)} -> logits {tuple(b_logits.shape)} [OK]")
     assert b_logits.shape == (BATCH, 64, BASELINE_CFG.vocab_size)
 
     with torch.no_grad():
         ll_logits, h_states = hailp(tokens)
-    print(f"  H(AI)LP RWKV  : input {tuple(tokens.shape)} → logits {tuple(ll_logits.shape)} ✓")
+    print(f"  H(AI)LP RWKV  : input {tuple(tokens.shape)} -> logits {tuple(ll_logits.shape)} [OK]")
     assert ll_logits.shape == (BATCH, 64, HAILP_CFG.vocab_size)
 
     # ── [2] Memory growth comparison ───────────────────────────────────────────
@@ -134,7 +134,7 @@ def run_demo() -> None:
             _, h = hailp(x)
         actual_state_bytes = sum(s.numel() * s.element_size() for s in h)
 
-        suffix = "" if seq == SEQ_LENS[0] else "  ← SAME"
+        suffix = "" if seq == SEQ_LENS[0] else "  (same)"
         print(
             f"  Seq {seq:>4} | Baseline KV cache: {kv_bytes:>15,} bytes |"
             f" H(AI)LP state: {actual_state_bytes:>8,} bytes{suffix}"
@@ -149,9 +149,9 @@ def run_demo() -> None:
         state_sizes.append(sum(s.numel() * s.element_size() for s in h))
 
     assert all(s == state_sizes[0] for s in state_sizes), (
-        f"❌ H(AI)LP state is NOT constant! Sizes: {state_sizes}"
+        f"FAIL: H(AI)LP state is NOT constant! Sizes: {state_sizes}"
     )
-    print(f"\n  ✓ H(AI)LP state is CONSTANT across all sequence lengths: {state_sizes[0]:,} bytes")
+    print(f"\n  OK: H(AI)LP state is CONSTANT across all sequence lengths: {state_sizes[0]:,} bytes")
 
     # ── [3] Recurrent state: continuous context ────────────────────────────────
     section(3, "Recurrent state: continuous context")
@@ -167,8 +167,8 @@ def run_demo() -> None:
         _, h_states_after = hailp(x2, h_states=h_states)
         norm_after = h_states_after[0].norm().item()
 
-    print(f"  After chunk 1 → state[0] norm: {norm_before:.4f}")
-    print(f"  After chunk 2 → state[0] norm: {norm_after:.4f}  (state updated!)")
+    print(f"  After chunk 1 -> state[0] norm: {norm_before:.4f}")
+    print(f"  After chunk 2 -> state[0] norm: {norm_after:.4f}  (state updated!)")
     print(f"  State shape CONSTANT: {tuple(h_states_after[0].shape)}")
 
     assert h_states_after[0].shape == (BATCH, HAILP_CFG.hidden_dim), (
@@ -187,15 +187,15 @@ def run_demo() -> None:
 
     # ── Summary ────────────────────────────────────────────────────────────────
     print()
-    divider("═")
-    print("✓ All H(AI)LP properties demonstrated.")
+    divider("=")
+    print("All H(AI)LP properties demonstrated.")
     print()
     print("Key result:")
     print(f"  Baseline KV cache at seq=512:  {baseline.total_kv_cache_bytes:,} bytes (grows with seq)")
     print(f"  H(AI)LP RWKV state at seq=512: {state_sizes[-1]:,} bytes (CONSTANT)")
     ratio = baseline.total_kv_cache_bytes / max(state_sizes[-1], 1)
-    print(f"  Memory ratio: {ratio:.1f}× smaller fixed state")
-    divider("═")
+    print(f"  Memory ratio: {ratio:.1f}x smaller fixed state")
+    divider("=")
     print()
 
 

@@ -88,6 +88,17 @@ From `benchmarks/speed_profile.py` (warmup=1, repeats=3). Device: CPU.
 
 **Target:** Both models reach **validation perplexity &lt; 50** on Simple English Wikipedia (per Phase 2 gate). Full run: ~3–4 h per model on laptop GPU, or ~24–48 h on CPU.
 
+**Resume from checkpoints**
+
+- Checkpoints are stored in `checkpoints/baseline/` and `checkpoints/hailp/` (`ckpt_*.pt` + `best.pt`).
+- To resume training from the latest checkpoint for both models:
+
+  ```powershell
+  uv run python train.py --model both --resume
+  ```
+
+- The script will skip a model if it has already reached `total_steps`.
+
 ---
 
 ## Quality metrics
@@ -96,6 +107,59 @@ From `benchmarks/speed_profile.py` (warmup=1, repeats=3). Device: CPU.
 - **Tool:** `benchmarks/quality_eval.py` (optional `--checkpoint-dir checkpoints` to load `best.pt`).
 - **Before training:** Random init gives high loss/ppl (baseline only).
 - **After training:** Compare both models on the same val set; target ppl &lt; 50 for a fair comparison.
+- **CLI after training:** Once full runs complete, evaluate both from checkpoints:
+
+  ```powershell
+  uv run python benchmarks/quality_eval.py --model both --checkpoint-dir checkpoints --max-batches 100
+  ```
+
+  This produces trained validation loss/perplexity for both models, ready to plug into the comparison report.
+
+---
+
+## Quantisation and deployment story
+
+### Projected model sizes (HAILP @ 18.5M params)
+
+Based on the param counts from `param_efficiency.py`:
+
+- **FP32 (measured):** ~70.5 MB
+- **FP16 (projected):** ~35 MB
+- **INT4 (projected):** ~9–10 MB
+
+At ~360M parameters (≈20× the current HAILP scale), an INT4 HAILP model would be in the **180–200 MB** range, matching the target for low‑end Android deployment.
+
+You can also produce a **real INT4 storage file** from `checkpoints/hailp/best.pt` via:
+
+```powershell
+uv run python benchmarks/quantize_int4.py `
+  --ckpt checkpoints/hailp/best.pt `
+  --out hailp_int4_storage.pt
+```
+
+This writes a compact INT4‑encoded weight file (for storage / size measurement), typically around **~10 MB** at the current scale.
+
+### llama.cpp deployment stack
+
+The intended production deployment path is:
+
+```text
+H(AI)LP model weights (our architecture, our training)
+        ↓
+GGUF file format (llama.cpp's container format)
+        ↓
+llama.cpp inference engine (efficient CPU inference, inc. Android)
+        ↓
+JNI bridge (C API → Kotlin)
+        ↓
+Android app (user interface)
+```
+
+- **GGUF format** — llama.cpp’s quantised model format, now a de‑facto standard for mobile/edge deployment.
+- **Android inference** — llama.cpp’s ARM‑optimised kernel + NDK support enables 4‑bit CPU inference on budget phones.
+- **JNI bridge** — a thin Java/Kotlin layer calls into the C API exposed by llama.cpp.
+
+The model architecture remains entirely HAILP; llama.cpp simply provides the **runtime and GGUF container** for small INT4 models on constrained hardware (including RWKV‑style models).
 
 ---
 

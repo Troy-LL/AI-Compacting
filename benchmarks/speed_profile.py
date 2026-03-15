@@ -140,6 +140,50 @@ def run_hailp_speed(
     return results
 
 
+def benchmark_speed_vs_sequence_length(
+    model: torch.nn.Module,
+    model_name: str,
+    *,
+    seq_lens: list[int],
+    batch_size: int,
+    device: torch.device,
+    warmup: int = DEFAULT_WARMUP,
+    repeats: int = DEFAULT_REPEATS,
+    is_recurrent: bool = False,
+    vocab_size: int = 8_000,
+) -> list[dict]:
+    """Generic speed benchmark used by the spec.
+
+    This mirrors ``benchmark_speed_vs_sequence_length`` in the design
+    doc: measure tokens/second at different sequence lengths for an
+    arbitrary model.  The CLI still uses the Baseline/H(AI)LP helpers
+    above, but notebooks and higher-level scripts can call this
+    function directly.
+    """
+    model = model.to(device).eval()
+    results: list[dict] = []
+    for seq in seq_lens:
+        tps = _tokens_per_second(
+            model,
+            batch_size=batch_size,
+            seq_len=seq,
+            vocab_size=vocab_size,
+            device=device,
+            warmup=warmup,
+            repeats=repeats,
+            is_recurrent=is_recurrent,
+        )
+        results.append(
+            {
+                "model": model_name,
+                "seq_len": seq,
+                "batch_size": batch_size,
+                "tokens_per_second": tps,
+            }
+        )
+    return results
+
+
 def print_table(rows: list[dict]) -> None:
     """Print a simple table of seq_len | model | tokens/sec."""
     header = f"{'seq_len':>8} | {'model':<15} | {'batch':>6} | {'tokens/sec':>12}"

@@ -83,7 +83,7 @@ def run_quality_eval(
     val_loader: torch.utils.data.DataLoader,
     checkpoint_dir: Path | None,
     max_batches: int | None,
-) -> dict[str, float]:
+    ) -> dict[str, float]:
     """Evaluate one model; return loss and perplexity."""
     if model_name == "baseline":
         ckpt = (checkpoint_dir / "baseline" / "best.pt") if checkpoint_dir else None
@@ -99,6 +99,38 @@ def run_quality_eval(
         val_loader,
         device,
         is_recurrent=is_recurrent,
+        max_batches=max_batches,
+    )
+
+
+def benchmark_quality(
+    model_name: str,
+    *,
+    checkpoint_dir: Path | None,
+    max_batches: int | None,
+    val_batches: int = 200,
+    device: torch.device | None = None,
+) -> dict[str, float]:
+    """High-level quality benchmark used by the spec.
+
+    This is a thin wrapper around ``run_quality_eval`` that builds the
+    validation dataloader and device, suitable for programmatic use in
+    a larger comparison script or notebook.
+    """
+    if device is None:
+        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+    _, val_loader = get_dataloaders(
+        seq_len=SEQ_LEN,
+        batch_size=BATCH_SIZE,
+        val_batches=val_batches,
+    )
+
+    return run_quality_eval(
+        model_name=model_name,
+        device=device,
+        val_loader=val_loader,
+        checkpoint_dir=checkpoint_dir,
         max_batches=max_batches,
     )
 
