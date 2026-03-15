@@ -39,13 +39,6 @@ def hailp_config() -> HAILPConfig:
     )
 
 
-# Legacy alias so existing test_lifelink.py fixtures still resolve
-@pytest.fixture(scope="session")
-def lifelink_config(hailp_config: HAILPConfig) -> HAILPConfig:  # noqa: F811
-    """Alias for hailp_config (backwards compat)."""
-    return hailp_config
-
-
 @pytest.fixture(scope="session")
 def tiny_baseline_config() -> BaselineConfig:
     """Tiny config for fast unit tests."""
@@ -74,13 +67,6 @@ def tiny_hailp_config() -> HAILPConfig:
     )
 
 
-# Legacy alias
-@pytest.fixture(scope="session")
-def tiny_lifelink_config(tiny_hailp_config: HAILPConfig) -> HAILPConfig:  # noqa: F811
-    """Alias for tiny_hailp_config (backwards compat)."""
-    return tiny_hailp_config
-
-
 # ── Models ─────────────────────────────────────────────────────────────────────
 
 @pytest.fixture(scope="session")
@@ -99,13 +85,6 @@ def tiny_hailp_model(tiny_hailp_config: HAILPConfig) -> HAILPModel:
     return model
 
 
-# Legacy alias so test_lifelink.py still works unchanged
-@pytest.fixture(scope="session")
-def tiny_lifelink_model(tiny_hailp_model: HAILPModel) -> HAILPModel:  # noqa: F811
-    """Alias for tiny_hailp_model (backwards compat)."""
-    return tiny_hailp_model
-
-
 @pytest.fixture(scope="session")
 def baseline_model(baseline_config: BaselineConfig) -> BaselineGPT:
     """Full baseline model (used for parameter count tests)."""
@@ -120,13 +99,6 @@ def hailp_model(hailp_config: HAILPConfig) -> HAILPModel:
     model = HAILPModel(hailp_config)
     model.eval()
     return model
-
-
-# Legacy alias
-@pytest.fixture(scope="session")
-def lifelink_model(hailp_model: HAILPModel) -> HAILPModel:  # noqa: F811
-    """Alias for hailp_model (backwards compat)."""
-    return hailp_model
 
 
 # ── Helpers ────────────────────────────────────────────────────────────────────

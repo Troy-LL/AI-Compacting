@@ -1,6 +1,6 @@
 # Baseline GPT Configuration
 # Control model — standard full-attention transformer
-# This is what we are beating with LifeLink RWKV.
+# This is what we are beating with H(AI)LP RWKV.
 
 model_type: gpt
 

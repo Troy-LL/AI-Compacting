@@ -1,4 +1,4 @@
-"""Memory benchmark: Baseline GPT (growing KV cache) vs LifeLink RWKV (fixed state).
+"""Memory benchmark: Baseline GPT (growing KV cache) vs H(AI)LP RWKV (fixed state).
 
 Run:
     python benchmarks/memory_benchmark.py
@@ -16,7 +16,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 import torch
 
 from models.baseline_gpt import BaselineConfig, BaselineGPT
-from models.lifelink_rwkv import LifeLinkConfig, LifeLinkRWKV
+from models.hailp_model import HAILPConfig, HAILPModel
 
 # ── Config ─────────────────────────────────────────────────────────────────────
 
@@ -30,7 +30,7 @@ BASELINE_CFG = BaselineConfig(
     dropout=0.0,
 )
 
-LIFELINK_CFG = LifeLinkConfig(
+HAILP_CFG = HAILPConfig(
     layers=12,
     hidden_dim=512,
     vocab_size=8000,
@@ -68,20 +68,20 @@ def run_baseline_benchmark(seq_lens: list[int]) -> list[dict]:
     return results
 
 
-def run_lifelink_benchmark(seq_lens: list[int]) -> list[dict]:
-    """Measure LifeLink fixed state."""
-    model = LifeLinkRWKV(LIFELINK_CFG)
+def run_hailp_benchmark(seq_lens: list[int]) -> list[dict]:
+    """Measure H(AI)LP fixed state."""
+    model = HAILPModel(HAILP_CFG)
     model.eval()
     results = []
 
     for seq in seq_lens:
-        x = torch.randint(0, LIFELINK_CFG.vocab_size, (BATCH_SIZE, seq))
+        x = torch.randint(0, HAILP_CFG.vocab_size, (BATCH_SIZE, seq))
         with torch.no_grad():
             _, h_states = model(x)
         state_bytes = sum(h.numel() * h.element_size() for h in h_states)
         results.append({
             "seq_len": seq,
-            "model": "LifeLink RWKV",
+            "model": "H(AI)LP RWKV",
             "state_bytes": state_bytes,
             "kv_cache_bytes": 0,
             "total_memory_bytes": state_bytes,
@@ -100,7 +100,7 @@ def print_table(rows: list[dict]) -> None:
     print("-" * len(header))
 
     baseline_at_8 = None
-    lifelink_at_8 = None
+    hailp_at_8 = None
 
     for row in rows:
         total = row["total_memory_bytes"]
@@ -111,9 +111,9 @@ def print_table(rows: list[dict]) -> None:
                 baseline_at_8 = total
             factor = total / baseline_at_8 if baseline_at_8 else 1.0
         else:
-            if lifelink_at_8 is None:
-                lifelink_at_8 = total
-            factor = total / lifelink_at_8 if lifelink_at_8 else 1.0
+            if hailp_at_8 is None:
+                hailp_at_8 = total
+            factor = total / hailp_at_8 if hailp_at_8 else 1.0
 
         print(
             f"{row['seq_len']:>8} | {row['model']:<15} | "
@@ -129,11 +129,11 @@ def main() -> None:
     print()
 
     baseline_results = run_baseline_benchmark(SEQUENCE_LENGTHS)
-    lifelink_results = run_lifelink_benchmark(SEQUENCE_LENGTHS)
+    hailp_results = run_hailp_benchmark(SEQUENCE_LENGTHS)
 
     # Interleave results for easy comparison
     combined = []
-    for b, l in zip(baseline_results, lifelink_results):
+    for b, l in zip(baseline_results, hailp_results):
         combined.append(b)
         combined.append(l)
 
@@ -141,15 +141,15 @@ def main() -> None:
     print()
     print("Key result:")
     print("  Baseline KV cache grows linearly with sequence length.")
-    print("  LifeLink RWKV state is CONSTANT regardless of sequence length.")
+    print("  H(AI)LP RWKV state is CONSTANT regardless of sequence length.")
     print()
 
     # Validation assertion — the whole point
-    lifelink_bytes = [r["total_memory_bytes"] for r in lifelink_results]
-    assert all(b == lifelink_bytes[0] for b in lifelink_bytes), (
-        "❌ FAIL: LifeLink state is NOT constant across sequence lengths!"
+    hailp_bytes = [r["total_memory_bytes"] for r in hailp_results]
+    assert all(b == hailp_bytes[0] for b in hailp_bytes), (
+        "❌ FAIL: H(AI)LP state is NOT constant across sequence lengths!"
     )
-    print("✓ PASS: LifeLink state is constant across all sequence lengths.")
+    print("✓ PASS: H(AI)LP state is constant across all sequence lengths.")
 
     baseline_bytes = [r["total_memory_bytes"] for r in baseline_results]
     assert baseline_bytes[-1] > baseline_bytes[0], (

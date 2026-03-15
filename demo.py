@@ -2,9 +2,9 @@
 
 Shows the core result in ~ 60 seconds on CPU:
   1. Both models accept tokens → output logits (correct shape)
-  2. LifeLink recurrent state is CONSTANT across sequence lengths
+  2. H(AI)LP recurrent state is CONSTANT across sequence lengths
   3. Baseline KV cache GROWS with sequence length
-  4. LifeLink uses 2× more layers but same parameter budget via sharing
+  4. H(AI)LP uses 2× more layers but same parameter budget via sharing
 
 Run:
     python demo.py
@@ -16,13 +16,13 @@ H(AI)LP: Demonstrating Fixed-Memory LLM Architecture
 
 [1] Forward pass shapes
   Baseline GPT  : input (2, 64) → logits (2, 64, 8000) ✓
-  LifeLink RWKV : input (2, 64) → logits (2, 64, 8000) ✓
+  H(AI)LP RWKV  : input (2, 64) → logits (2, 64, 8000) ✓
 
 [2] Memory growth comparison
-  Seq   64 | Baseline KV cache:    786,432 bytes | LifeLink state: 24,576 bytes
-  Seq  128 | Baseline KV cache:  1,572,864 bytes | LifeLink state: 24,576 bytes  ← SAME
-  Seq  256 | Baseline KV cache:  3,145,728 bytes | LifeLink state: 24,576 bytes  ← SAME
-  Seq  512 | Baseline KV cache:  6,291,456 bytes | LifeLink state: 24,576 bytes  ← SAME
+  Seq   64 | Baseline KV cache:    786,432 bytes | H(AI)LP state: 24,576 bytes
+  Seq  128 | Baseline KV cache:  1,572,864 bytes | H(AI)LP state: 24,576 bytes  ← SAME
+  Seq  256 | Baseline KV cache:  3,145,728 bytes | H(AI)LP state: 24,576 bytes  ← SAME
+  Seq  512 | Baseline KV cache:  6,291,456 bytes | H(AI)LP state: 24,576 bytes  ← SAME
 
 [3] Recurrent state: continuous context
   Token 1 → state[0] norm: 0.xxxx
@@ -31,7 +31,7 @@ H(AI)LP: Demonstrating Fixed-Memory LLM Architecture
 
 [4] Parameter counts
   Baseline GPT  : xx,xxx,xxx params
-  LifeLink RWKV : xx,xxx,xxx params  (shared FFNs = fewer unique params)
+  H(AI)LP RWKV  : xx,xxx,xxx params  (shared FFNs = fewer unique params)
 
 ✓ All H(AI)LP properties demonstrated.
 """
@@ -45,7 +45,7 @@ sys.path.insert(0, os.path.dirname(__file__))
 import torch
 
 from models.baseline_gpt import BaselineConfig, BaselineGPT
-from models.lifelink_rwkv import LifeLinkConfig, LifeLinkRWKV
+from models.hailp_model import HAILPConfig, HAILPModel
 
 
 # ── Config ─────────────────────────────────────────────────────────────────────
@@ -61,7 +61,7 @@ BASELINE_CFG = BaselineConfig(
     dropout=0.0,
 )
 
-LIFELINK_CFG = LifeLinkConfig(
+HAILP_CFG = HAILPConfig(
     layers=12,
     hidden_dim=512,
     vocab_size=8000,
@@ -93,8 +93,8 @@ def run_demo() -> None:
     baseline = BaselineGPT(BASELINE_CFG)
     baseline.eval()
 
-    lifelink = LifeLinkRWKV(LIFELINK_CFG)
-    lifelink.eval()
+    hailp = HAILPModel(HAILP_CFG)
+    hailp.eval()
     print("  Models loaded.")
 
     # ── [1] Forward pass shapes ────────────────────────────────────────────────
@@ -108,16 +108,16 @@ def run_demo() -> None:
     assert b_logits.shape == (BATCH, 64, BASELINE_CFG.vocab_size)
 
     with torch.no_grad():
-        ll_logits, h_states = lifelink(tokens)
-    print(f"  LifeLink RWKV : input {tuple(tokens.shape)} → logits {tuple(ll_logits.shape)} ✓")
-    assert ll_logits.shape == (BATCH, 64, LIFELINK_CFG.vocab_size)
+        ll_logits, h_states = hailp(tokens)
+    print(f"  H(AI)LP RWKV  : input {tuple(tokens.shape)} → logits {tuple(ll_logits.shape)} ✓")
+    assert ll_logits.shape == (BATCH, 64, HAILP_CFG.vocab_size)
 
     # ── [2] Memory growth comparison ───────────────────────────────────────────
     section(2, "Memory growth comparison")
-    print(f"  {'Seq':>5} | {'Baseline KV cache':>22} | {'LifeLink state':>16}")
+    print(f"  {'Seq':>5} | {'Baseline KV cache':>22} | {'H(AI)LP state':>16}")
     divider()
 
-    lifelink_state_bytes = LIFELINK_CFG.state_bytes  # fixed — compute once
+    hailp_state_bytes = HAILP_CFG.state_bytes  # fixed — compute once
 
     for seq in SEQ_LENS:
         x = torch.randint(0, BASELINE_CFG.vocab_size, (BATCH, seq))
@@ -128,50 +128,50 @@ def run_demo() -> None:
             baseline(x, use_cache=True)
         kv_bytes = baseline.total_kv_cache_bytes
 
-        # LifeLink state is CONSTANT — just report the config value
+        # H(AI)LP state is CONSTANT — just report the config value
         # (actual state from a single forward pass with batch=2)
         with torch.no_grad():
-            _, h = lifelink(x)
+            _, h = hailp(x)
         actual_state_bytes = sum(s.numel() * s.element_size() for s in h)
 
         suffix = "" if seq == SEQ_LENS[0] else "  ← SAME"
         print(
             f"  Seq {seq:>4} | Baseline KV cache: {kv_bytes:>15,} bytes |"
-            f" LifeLink state: {actual_state_bytes:>8,} bytes{suffix}"
+            f" H(AI)LP state: {actual_state_bytes:>8,} bytes{suffix}"
         )
 
     # Assert the key invariant
     state_sizes: list[int] = []
     for seq in SEQ_LENS:
-        x = torch.randint(0, LIFELINK_CFG.vocab_size, (BATCH, seq))
+        x = torch.randint(0, HAILP_CFG.vocab_size, (BATCH, seq))
         with torch.no_grad():
-            _, h = lifelink(x)
+            _, h = hailp(x)
         state_sizes.append(sum(s.numel() * s.element_size() for s in h))
 
     assert all(s == state_sizes[0] for s in state_sizes), (
-        f"❌ LifeLink state is NOT constant! Sizes: {state_sizes}"
+        f"❌ H(AI)LP state is NOT constant! Sizes: {state_sizes}"
     )
-    print(f"\n  ✓ LifeLink state is CONSTANT across all sequence lengths: {state_sizes[0]:,} bytes")
+    print(f"\n  ✓ H(AI)LP state is CONSTANT across all sequence lengths: {state_sizes[0]:,} bytes")
 
     # ── [3] Recurrent state: continuous context ────────────────────────────────
     section(3, "Recurrent state: continuous context")
 
     h_states = None
-    x1 = torch.randint(0, LIFELINK_CFG.vocab_size, (BATCH, 32))
-    x2 = torch.randint(0, LIFELINK_CFG.vocab_size, (BATCH, 32))
+    x1 = torch.randint(0, HAILP_CFG.vocab_size, (BATCH, 32))
+    x2 = torch.randint(0, HAILP_CFG.vocab_size, (BATCH, 32))
 
     with torch.no_grad():
-        _, h_states = lifelink(x1, h_states=h_states)
+        _, h_states = hailp(x1, h_states=h_states)
         norm_before = h_states[0].norm().item()
 
-        _, h_states_after = lifelink(x2, h_states=h_states)
+        _, h_states_after = hailp(x2, h_states=h_states)
         norm_after = h_states_after[0].norm().item()
 
     print(f"  After chunk 1 → state[0] norm: {norm_before:.4f}")
     print(f"  After chunk 2 → state[0] norm: {norm_after:.4f}  (state updated!)")
     print(f"  State shape CONSTANT: {tuple(h_states_after[0].shape)}")
 
-    assert h_states_after[0].shape == (BATCH, LIFELINK_CFG.hidden_dim), (
+    assert h_states_after[0].shape == (BATCH, HAILP_CFG.hidden_dim), (
         "State shape changed!"
     )
 
@@ -179,10 +179,10 @@ def run_demo() -> None:
     section(4, "Parameter counts")
 
     b_params = baseline.num_parameters()
-    ll_params = lifelink.num_parameters()
+    ll_params = hailp.num_parameters()
 
     print(f"  Baseline GPT  : {b_params:>12,} unique params (6 layers, full FFN)")
-    print(f"  LifeLink RWKV : {ll_params:>12,} unique params (12 layers, shared FFN)")
+    print(f"  H(AI)LP RWKV  : {ll_params:>12,} unique params (12 layers, shared FFN)")
     print(f"  Shared FFN savings: {b_params - ll_params:+,} params")
 
     # ── Summary ────────────────────────────────────────────────────────────────
@@ -192,8 +192,8 @@ def run_demo() -> None:
     print()
     print("Key result:")
     print(f"  Baseline KV cache at seq=512:  {baseline.total_kv_cache_bytes:,} bytes (grows with seq)")
-    print(f"  LifeLink RWKV state at seq=512: {state_sizes[-1]:,} bytes (CONSTANT)")
-    ratio = baseline.total_kv_cache_bytes / state_sizes[-1]
+    print(f"  H(AI)LP RWKV state at seq=512: {state_sizes[-1]:,} bytes (CONSTANT)")
+    ratio = baseline.total_kv_cache_bytes / max(state_sizes[-1], 1)
     print(f"  Memory ratio: {ratio:.1f}× smaller fixed state")
     divider("═")
     print()

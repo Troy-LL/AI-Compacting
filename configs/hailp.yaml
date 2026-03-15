@@ -1,11 +1,11 @@
-# LifeLink RWKV Configuration
+# H(AI)LP RWKV Configuration
 # Innovation model — recurrent architecture with fixed memory footprint.
 # Key differences vs baseline GPT:
 #   1. Fixed-size recurrent state (no KV cache growth)
 #   2. FFN weight sharing across groups of layers
 #   3. Low-rank attention projections
 
-model_type: lifelink_rwkv
+model_type: hailp
 
 # Architecture
 layers: 12               # More layers to compensate for parameter savings

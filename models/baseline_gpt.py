@@ -1,7 +1,7 @@
 """Baseline GPT — standard full-attention transformer at ~50M parameters.
 
 Used as the CONTROL model in H(AI)LP. Demonstrates the KV-cache memory growth
-problem that LifeLink RWKV is designed to solve.
+problem that H(AI)LP RWKV is designed to solve.
 
 Architecture
 ------------
@@ -16,7 +16,7 @@ The KV-cache memory grows as:
 At seq=64:   2 × 6 × 8 × 64 × 64 × 4 bytes  =  1.5 MB
 At seq=512:  2 × 6 × 8 × 512 × 64 × 4 bytes  = 12.6 MB  (8× larger)
 
-This is the problem. LifeLink RWKV replaces this with a fixed 512-byte state.
+This is the problem. H(AI)LP RWKV replaces this with a fixed 512-byte state.
 """
 
 from __future__ import annotations

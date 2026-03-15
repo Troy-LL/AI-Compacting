@@ -96,7 +96,7 @@ class TestBaselineParameterCount:
 # ── KV cache grows ────────────────────────────────────────────────────────────
 
 class TestBaselineKVCacheGrows:
-    """These tests PROVE the memory growth problem that LifeLink solves."""
+    """These tests PROVE the memory growth problem that H(AI)LP solves."""
 
     def test_kv_cache_grows_with_sequence_length(self, tiny_baseline_model: BaselineGPT) -> None:
         """KV cache byte count must be larger at seq=32 than at seq=8."""

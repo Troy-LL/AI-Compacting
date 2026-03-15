@@ -367,9 +367,3 @@ class HAILPModel(nn.Module):
         return cls(HAILPConfig.from_yaml(path))
 
 
-# ---------------------------------------------------------------------------
-# Backwards-compatibility aliases (old LifeLink names still importable)
-# ---------------------------------------------------------------------------
-LifeLinkConfig = HAILPConfig
-LifeLinkRWKV = HAILPModel
-LifeLinkBlock = HAILPBlock
