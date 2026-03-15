@@ -1,0 +1,25 @@
+# Baseline GPT Configuration
+# Control model — standard full-attention transformer
+# This is what we are beating with LifeLink RWKV.
+
+model_type: gpt
+
+# Architecture
+layers: 6
+hidden_dim: 512
+attention_heads: 8
+ffn_expansion: 4         # FFN intermediate = hidden_dim * ffn_expansion = 2048
+vocab_size: 8000
+context_window: 512
+
+# Attention
+attention_type: full     # O(n²) — the bottleneck we're demonstrating
+kv_cache: true           # KV cache GROWS with sequence length (the problem)
+
+# Target
+parameters_target: 50_000_000  # ~50M parameters
+
+# Memory behaviour (documented for test assertions)
+# At seq=64:   KV cache = 2 * layers * heads * seq * head_dim * dtype_bytes
+# At seq=512:  KV cache = 8x larger — RAM grows linearly with context
+memory_grows_with_sequence: true

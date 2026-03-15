@@ -1,0 +1,30 @@
+# LifeLink RWKV Configuration
+# Innovation model — recurrent architecture with fixed memory footprint.
+# Key differences vs baseline GPT:
+#   1. Fixed-size recurrent state (no KV cache growth)
+#   2. FFN weight sharing across groups of layers
+#   3. Low-rank attention projections
+
+model_type: lifelink_rwkv
+
+# Architecture
+layers: 12               # More layers to compensate for parameter savings
+hidden_dim: 512
+vocab_size: 8000
+
+# Parameter efficiency features
+ffn_sharing_group_size: 4  # Share one FFN block per 4 layers (3 shared blocks for 12 layers)
+low_rank_dim: 64            # Rank-64 decomposition for attention projections (W = U @ V^T)
+adapter_rank: 32            # Language adapter bottleneck dimension
+
+# Recurrent state
+recurrent_state: true      # Fixed state size regardless of sequence length — THE KEY FEATURE
+state_dim: 512             # Hidden state dimension (same as hidden_dim)
+
+# Target
+parameters_target: 50_000_000  # ~50M parameters
+
+# Memory behaviour (documented for test assertions)
+# At seq=64:   state = fixed tensor of shape (batch, layers, state_dim)
+# At seq=512:  state = SAME fixed tensor — RAM is CONSTANT
+memory_grows_with_sequence: false
