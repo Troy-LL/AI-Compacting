@@ -26,6 +26,7 @@ from models.baseline_gpt import BaselineConfig, BaselineGPT
 from models.hailp_model import HAILPConfig, HAILPModel
 from training.data import get_dataloaders
 from training.trainer import evaluate
+from training.device import DEVICE as DEFAULT_DEVICE
 
 # Match train.py model config (vocab_size for GPT-2 tokeniser)
 VOCAB_SIZE = 50_257
@@ -118,12 +119,13 @@ def benchmark_quality(
     a larger comparison script or notebook.
     """
     if device is None:
-        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        device = DEFAULT_DEVICE
 
     _, val_loader = get_dataloaders(
         seq_len=SEQ_LEN,
         batch_size=BATCH_SIZE,
         val_batches=val_batches,
+        device=device,
     )
 
     return run_quality_eval(
@@ -143,7 +145,7 @@ def main() -> None:
     parser.add_argument(
         "--model",
         choices=("baseline", "hailp", "both"),
-        default="both",
+        default="hailp",
         help="Which model(s) to evaluate",
     )
     parser.add_argument(
@@ -166,23 +168,27 @@ def main() -> None:
     )
     parser.add_argument(
         "--device",
-        choices=("cpu", "cuda", "auto"),
+        choices=("cpu", "cuda", "directml", "auto"),
         default="auto",
         help="Device",
     )
     args = parser.parse_args()
 
-    device = (
-        torch.device("cuda" if torch.cuda.is_available() else "cpu")
-        if args.device == "auto"
-        else torch.device(args.device)
-    )
+    if args.device == "auto":
+        device = DEFAULT_DEVICE
+    elif args.device == "directml":
+        import torch_directml  # type: ignore
+
+        device = torch_directml.device()
+    else:
+        device = torch.device(args.device)
 
     print("Building validation dataloader (may download tokeniser / stream data)...")
     _, val_loader = get_dataloaders(
         seq_len=SEQ_LEN,
         batch_size=BATCH_SIZE,
         val_batches=args.val_batches,
+        device=device,
     )
     print(f"  Device: {device}  |  max_batches: {args.max_batches}")
     print()

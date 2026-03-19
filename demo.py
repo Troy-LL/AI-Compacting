@@ -40,6 +40,7 @@ from __future__ import annotations
 
 import sys
 import os
+import argparse
 sys.path.insert(0, os.path.dirname(__file__))
 
 import torch
@@ -83,15 +84,17 @@ def section(n: int, title: str) -> None:
     print(f"\n[{n}] {title}")
 
 
-def run_demo() -> None:
+def run_demo(*, baseline_compare: bool = False) -> None:
     print()
     divider("=")
     print("H(AI)LP: Demonstrating Fixed-Memory LLM Architecture")
     divider("=")
 
     print("\nLoading models (this may take a few seconds)...")
-    baseline = BaselineGPT(BASELINE_CFG)
-    baseline.eval()
+    baseline = None
+    if baseline_compare:
+        baseline = BaselineGPT(BASELINE_CFG)
+        baseline.eval()
 
     hailp = HAILPModel(HAILP_CFG)
     hailp.eval()
@@ -100,12 +103,16 @@ def run_demo() -> None:
     # ── [1] Forward pass shapes ────────────────────────────────────────────────
     section(1, "Forward pass shapes")
 
-    tokens = torch.randint(0, BASELINE_CFG.vocab_size, (BATCH, 64))
+    tokens = torch.randint(0, HAILP_CFG.vocab_size, (BATCH, 64))
 
-    with torch.no_grad():
-        b_logits = baseline(tokens)
-    print(f"  Baseline GPT  : input {tuple(tokens.shape)} -> logits {tuple(b_logits.shape)} [OK]")
-    assert b_logits.shape == (BATCH, 64, BASELINE_CFG.vocab_size)
+    if baseline_compare:
+        assert baseline is not None
+        with torch.no_grad():
+            b_logits = baseline(tokens)
+        print(
+            f"  Baseline GPT  : input {tuple(tokens.shape)} -> logits {tuple(b_logits.shape)} [OK]"
+        )
+        assert b_logits.shape == (BATCH, 64, BASELINE_CFG.vocab_size)
 
     with torch.no_grad():
         ll_logits, h_states = hailp(tokens)
@@ -114,19 +121,27 @@ def run_demo() -> None:
 
     # ── [2] Memory growth comparison ───────────────────────────────────────────
     section(2, "Memory growth comparison")
-    print(f"  {'Seq':>5} | {'Baseline KV cache':>22} | {'H(AI)LP state':>16}")
+    if baseline_compare:
+        print(
+            f"  {'Seq':>5} | {'Baseline KV cache':>22} | {'H(AI)LP state':>16}"
+        )
+    else:
+        print(f"  {'Seq':>5} | {'H(AI)LP state':>16}")
     divider()
 
     hailp_state_bytes = HAILP_CFG.state_bytes  # fixed — compute once
 
     for seq in SEQ_LENS:
-        x = torch.randint(0, BASELINE_CFG.vocab_size, (BATCH, seq))
+        x = torch.randint(0, HAILP_CFG.vocab_size, (BATCH, seq))
 
-        # Baseline: run with cache, measure accumulated KV size
-        baseline.clear_cache()
-        with torch.no_grad():
-            baseline(x, use_cache=True)
-        kv_bytes = baseline.total_kv_cache_bytes
+        kv_bytes = None
+        if baseline_compare:
+            assert baseline is not None
+            # Baseline: run with cache, measure accumulated KV size
+            baseline.clear_cache()
+            with torch.no_grad():
+                baseline(x, use_cache=True)
+            kv_bytes = baseline.total_kv_cache_bytes
 
         # H(AI)LP state is CONSTANT — just report the config value
         # (actual state from a single forward pass with batch=2)
@@ -135,10 +150,14 @@ def run_demo() -> None:
         actual_state_bytes = sum(s.numel() * s.element_size() for s in h)
 
         suffix = "" if seq == SEQ_LENS[0] else "  (same)"
-        print(
-            f"  Seq {seq:>4} | Baseline KV cache: {kv_bytes:>15,} bytes |"
-            f" H(AI)LP state: {actual_state_bytes:>8,} bytes{suffix}"
-        )
+        if baseline_compare:
+            assert kv_bytes is not None
+            print(
+                f"  Seq {seq:>4} | Baseline KV cache: {kv_bytes:>15,} bytes |"
+                f" H(AI)LP state: {actual_state_bytes:>8,} bytes{suffix}"
+            )
+        else:
+            print(f"  Seq {seq:>4} | H(AI)LP state: {actual_state_bytes:>8,} bytes{suffix}")
 
     # Assert the key invariant
     state_sizes: list[int] = []
@@ -178,12 +197,14 @@ def run_demo() -> None:
     # ── [4] Parameter counts ───────────────────────────────────────────────────
     section(4, "Parameter counts")
 
-    b_params = baseline.num_parameters()
     ll_params = hailp.num_parameters()
 
-    print(f"  Baseline GPT  : {b_params:>12,} unique params (6 layers, full FFN)")
     print(f"  H(AI)LP RWKV  : {ll_params:>12,} unique params (12 layers, shared FFN)")
-    print(f"  Shared FFN savings: {b_params - ll_params:+,} params")
+    if baseline_compare:
+        assert baseline is not None
+        b_params = baseline.num_parameters()
+        print(f"  Baseline GPT  : {b_params:>12,} unique params (6 layers, full FFN)")
+        print(f"  Shared FFN savings: {b_params - ll_params:+,} params")
 
     # ── Summary ────────────────────────────────────────────────────────────────
     print()
@@ -191,13 +212,24 @@ def run_demo() -> None:
     print("All H(AI)LP properties demonstrated.")
     print()
     print("Key result:")
-    print(f"  Baseline KV cache at seq=512:  {baseline.total_kv_cache_bytes:,} bytes (grows with seq)")
     print(f"  H(AI)LP RWKV state at seq=512: {state_sizes[-1]:,} bytes (CONSTANT)")
-    ratio = baseline.total_kv_cache_bytes / max(state_sizes[-1], 1)
-    print(f"  Memory ratio: {ratio:.1f}x smaller fixed state")
+    if baseline_compare:
+        assert baseline is not None
+        print(
+            f"  Baseline KV cache at seq=512:  {baseline.total_kv_cache_bytes:,} bytes (grows with seq)"
+        )
+        ratio = baseline.total_kv_cache_bytes / max(state_sizes[-1], 1)
+        print(f"  Memory ratio: {ratio:.1f}x smaller fixed state")
     divider("=")
     print()
 
 
 if __name__ == "__main__":
-    run_demo()
+    parser = argparse.ArgumentParser(description="H(AI)LP demo (optional Baseline GPT comparisons).")
+    parser.add_argument(
+        "--baseline",
+        action="store_true",
+        help="Include Baseline GPT comparisons (slower).",
+    )
+    args = parser.parse_args()
+    run_demo(baseline_compare=args.baseline)

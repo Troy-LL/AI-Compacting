@@ -1,28 +1,22 @@
 #!/usr/bin/env python
-"""train.py -- Fair comparison training loop: BaselineGPT vs H(AI)LP.
+"""train.py -- H(AI)LP training loop (no baseline).
 
-Both models train on identical data (same tokeniser, same shuffle seed,
-same batch ordering) and share every hyperparameter to ensure results are
-directly comparable.
+H(AI)LP (RWKV-style recurrent state) is trained on the same streaming
+Simple English Wikipedia token stream used by the original project.
 
 Usage
 -----
-# Train one model from scratch:
-    python train.py --model baseline
-    python train.py --model hailp
-
-# Train both sequentially:
-    python train.py --model both
+# Train H(AI)LP from scratch:
+    python train.py
 
 # Resume from the latest checkpoint:
-    python train.py --model baseline --resume
-    python train.py --model hailp    --resume
+    python train.py --resume
 
 # Disable Weights & Biases (offline / no account):
-    python train.py --model both --no-wandb
+    python train.py --no-wandb
 
 # Quick smoke test -- 200 steps, batch size 4:
-    python train.py --model both --steps 200 --batch-size 4 --no-wandb
+    python train.py --steps 200 --batch-size 4 --no-wandb
 
 Checkpoints are saved to::
 
@@ -39,8 +33,8 @@ from pathlib import Path
 import torch
 from torch.cuda.amp import GradScaler
 
-from models.baseline_gpt import BaselineConfig, BaselineGPT
 from models.hailp_model import HAILPConfig, HAILPModel
+from training.device import DEVICE as DEFAULT_DEVICE
 from training.data import get_dataloaders
 from training.trainer import (
     CheckpointManager,
@@ -76,44 +70,8 @@ CHECKPOINT_ROOT = Path("checkpoints")
 
 
 # ---------------------------------------------------------------------------
-# Device
+# Model factories
 # ---------------------------------------------------------------------------
-
-
-def get_device() -> torch.device:
-    """Select GPU if available, CPU otherwise; print a summary."""
-    if torch.cuda.is_available():
-        dev = torch.device("cuda")
-        props = torch.cuda.get_device_properties(0)
-        vram = props.total_memory / 1024 ** 3
-        print(f"Device : {props.name}  ({vram:.1f} GB VRAM)")
-    else:
-        import multiprocessing
-        dev = torch.device("cpu")
-        print(f"Device : CPU  ({multiprocessing.cpu_count()} cores)")
-    return dev
-
-
-# ---------------------------------------------------------------------------
-# Model factories  (matched parameter counts for fairness)
-# ---------------------------------------------------------------------------
-
-
-def make_baseline() -> tuple[torch.nn.Module, bool]:
-    """Build BaselineGPT; return (model, is_recurrent=False)."""
-    cfg = BaselineConfig(
-        vocab_size=50_257,
-        layers=6,
-        attention_heads=8,
-        hidden_dim=512,
-        ffn_expansion=4,     # ffn_dim = hidden_dim × ffn_expansion = 2_048
-        context_window=512,
-        dropout=0.1,
-    )
-    model = BaselineGPT(cfg)
-    n_params = sum(p.numel() for p in model.parameters())
-    print(f"BaselineGPT : {n_params / 1e6:.1f}M parameters")
-    return model, False
 
 
 def make_hailp() -> tuple[torch.nn.Module, bool]:
@@ -139,13 +97,13 @@ def make_hailp() -> tuple[torch.nn.Module, bool]:
 
 
 def maybe_resume(
-    model_name: str,
     model: torch.nn.Module,
     optimizer: torch.optim.Optimizer,
     scaler: object,
     device: torch.device,
 ) -> int:
     """Load the latest checkpoint if one exists; return start_step."""
+    model_name = "hailp"
     ckpt_dir = CHECKPOINT_ROOT / model_name
     mgr = CheckpointManager(ckpt_dir)
     latest = mgr.latest()
@@ -162,22 +120,19 @@ def maybe_resume(
 
 
 def run_model(
-    model_name: str,
     device: torch.device,
     config: dict,
     resume: bool,
     use_wandb: bool,
 ) -> None:
     """Build, (optionally resume), and train one model."""
+    model_name = "hailp"
     print(f"\n{'#' * 62}")
     print(f"  Model : {model_name.upper()}")
     print(f"{'#' * 62}")
 
     # Build model
-    if model_name == "baseline":
-        model, is_recurrent = make_baseline()
-    else:
-        model, is_recurrent = make_hailp()
+    model, is_recurrent = make_hailp()
 
     # Build dataloaders (identical for both models)
     print("Building dataloaders (materialising validation set)...")
@@ -186,6 +141,7 @@ def run_model(
         seq_len=config["sequence_length"],
         batch_size=config["batch_size"],
         val_batches=config["val_batches"],
+        device=device,
     )
     print(f"  Done in {time.perf_counter() - t0:.1f}s")
 
@@ -194,7 +150,7 @@ def run_model(
     if resume:
         use_amp = (
             config.get("mixed_precision") in ("bf16", "fp16")
-            and torch.cuda.is_available()
+            and device.type == "cuda"
         )
         optimizer = build_optimizer(
             model,
@@ -202,7 +158,7 @@ def run_model(
             weight_decay=config["weight_decay"],
         )
         scaler = GradScaler() if use_amp else None
-        start_step = maybe_resume(model_name, model, optimizer, scaler, device)
+        start_step = maybe_resume(model, optimizer, scaler, device)
         if start_step >= config["total_steps"]:
             print(
                 f"[{model_name}] Already complete "
@@ -232,14 +188,8 @@ def run_model(
 
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(
-        description="Train BaselineGPT vs H(AI)LP on Simple English Wikipedia.",
+        description="Train H(AI)LP on Simple English Wikipedia.",
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
-    )
-    p.add_argument(
-        "--model",
-        choices=["baseline", "hailp", "both"],
-        default="both",
-        help="Which model(s) to train.",
     )
     p.add_argument(
         "--resume",
@@ -274,7 +224,7 @@ def build_parser() -> argparse.ArgumentParser:
 
 def main() -> None:
     args = build_parser().parse_args()
-    device = get_device()
+    device = DEFAULT_DEVICE
 
     # Build config (start from defaults, apply overrides)
     config = DEFAULT_CONFIG.copy()
@@ -295,12 +245,7 @@ def main() -> None:
     for k, v in config.items():
         print(f"  {k:20s}: {v}")
 
-    models_to_run = (
-        ["baseline", "hailp"] if args.model == "both" else [args.model]
-    )
-
-    for model_name in models_to_run:
-        run_model(model_name, device, config, args.resume, use_wandb)
+    run_model(device, config, args.resume, use_wandb)
 
     print("\n  All done.")
 

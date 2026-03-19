@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import base64
 import io
+import argparse
 import sys
 from pathlib import Path
 from typing import List
@@ -22,6 +23,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 import matplotlib.pyplot as plt
 import torch
+
+from training.device import DEVICE as DEFAULT_DEVICE, DEVICE_NAME
 
 from benchmarks.memory_profile import benchmark_memory_vs_sequence_length
 from benchmarks.speed_profile import benchmark_speed_vs_sequence_length
@@ -43,7 +46,7 @@ def generate_report_html(mem_img: str, speed_img: str, quality_img: str) -> str:
 <html lang="en">
 <head>
   <meta charset="utf-8" />
-  <title>H(AI)LP Architecture Comparison</title>
+  <title>H(AI)LP Architecture Report</title>
   <style>
     body {{ font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; margin: 2rem; color: #111; }}
     h1, h2 {{ color: #222; }}
@@ -54,10 +57,10 @@ def generate_report_html(mem_img: str, speed_img: str, quality_img: str) -> str:
   </style>
 </head>
 <body>
-  <h1>H(AI)LP Architecture Comparison Report</h1>
+  <h1>H(AI)LP Architecture Report</h1>
   <div class="summary">
-    <p>This report compares a Baseline GPT (6-layer transformer) with the H(AI)LP RWKV model
-    (12-layer recurrent, fixed state) on memory usage, speed, and quality metrics.</p>
+    <p>This report evaluates the H(AI)LP RWKV model (12-layer recurrent, fixed state) on memory usage,
+    speed, and quality metrics. Optional Baseline GPT comparisons can be enabled with `--baseline`.</p>
   </div>
 
   <div class="chart">
@@ -89,7 +92,18 @@ def generate_report_html(mem_img: str, speed_img: str, quality_img: str) -> str:
 
 
 def main() -> None:
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    parser = argparse.ArgumentParser(
+        description="Generate an HTML H(AI)LP report (default H(AI)LP-only)."
+    )
+    parser.add_argument(
+        "--baseline",
+        action="store_true",
+        help="Include Baseline GPT charts for comparison.",
+    )
+    args = parser.parse_args()
+
+    device = DEFAULT_DEVICE
+    print(f"Generating report (runs on: {DEVICE_NAME} / {device})")
 
     # Build configs/models used across benchmarks
     b_cfg = BaselineConfig(
@@ -111,25 +125,35 @@ def main() -> None:
         dropout=0.0,
     )
 
-    baseline = BaselineGPT(b_cfg)
     hailp = HAILPModel(h_cfg)
 
     # Memory: use helper from memory_profile
     seq_lens: List[int] = [64, 128, 256, 512, 1024]
-    mem_baseline = benchmark_memory_vs_sequence_length(
-        baseline, "Baseline GPT", sequence_lengths=seq_lens, device=device, is_recurrent=False
-    )
     mem_hailp = benchmark_memory_vs_sequence_length(
-        hailp, "H(AI)LP RWKV", sequence_lengths=seq_lens, device=device, is_recurrent=True
+        hailp,
+        "H(AI)LP RWKV",
+        sequence_lengths=seq_lens,
+        device=device,
+        is_recurrent=True,
     )
 
     fig1, ax1 = plt.subplots()
-    ax1.plot(
-        [p.seq_len for p in mem_baseline],
-        [p.peak_ram_mb for p in mem_baseline],
-        label="Baseline GPT",
-        marker="o",
-    )
+    if args.baseline:
+        baseline = BaselineGPT(b_cfg)
+        mem_baseline = benchmark_memory_vs_sequence_length(
+            baseline,
+            "Baseline GPT",
+            sequence_lengths=seq_lens,
+            device=device,
+            is_recurrent=False,
+        )
+        ax1.plot(
+            [p.seq_len for p in mem_baseline],
+            [p.peak_ram_mb for p in mem_baseline],
+            label="Baseline GPT",
+            marker="o",
+        )
+
     ax1.plot(
         [p.seq_len for p in mem_hailp],
         [p.peak_ram_mb for p in mem_hailp],
@@ -144,14 +168,25 @@ def main() -> None:
 
     # Speed benchmark
     speed_results = benchmark_speed_vs_sequence_length(
-        BaselineGPT(b_cfg), "Baseline GPT", seq_lens=seq_lens, batch_size=1, device=device, is_recurrent=False
+        HAILPModel(h_cfg),
+        "H(AI)LP RWKV",
+        seq_lens=seq_lens,
+        batch_size=1,
+        device=device,
+        is_recurrent=True,
     )
-    speed_results += benchmark_speed_vs_sequence_length(
-        HAILPModel(h_cfg), "H(AI)LP RWKV", seq_lens=seq_lens, batch_size=1, device=device, is_recurrent=True
-    )
+    if args.baseline:
+        speed_results += benchmark_speed_vs_sequence_length(
+            BaselineGPT(b_cfg),
+            "Baseline GPT",
+            seq_lens=seq_lens,
+            batch_size=1,
+            device=device,
+            is_recurrent=False,
+        )
 
     fig2, ax2 = plt.subplots()
-    for model_name in {"Baseline GPT", "H(AI)LP RWKV"}:
+    for model_name in sorted({r["model"] for r in speed_results}):
         xs = [r["seq_len"] for r in speed_results if r["model"] == model_name]
         ys = [r["tokens_per_second"] for r in speed_results if r["model"] == model_name]
         ax2.plot(xs, ys, marker="o", label=model_name)
@@ -162,40 +197,43 @@ def main() -> None:
     speed_img = _fig_to_base64(fig2)
 
     # Quality benchmark (small, random-init or from checkpoints if present)
-    try:
-        q_baseline = benchmark_quality(
-            "baseline",
-            checkpoint_dir=Path("checkpoints"),
-            max_batches=50,
-            val_batches=100,
-        )
-        q_hailp = benchmark_quality(
-            "hailp",
-            checkpoint_dir=Path("checkpoints"),
-            max_batches=50,
-            val_batches=100,
-        )
-    except Exception:
-        # Fallback: random-init quick eval
-        q_baseline = benchmark_quality(
-            "baseline",
-            checkpoint_dir=None,
-            max_batches=10,
-            val_batches=20,
-        )
-        q_hailp = benchmark_quality(
-            "hailp",
-            checkpoint_dir=None,
-            max_batches=10,
-            val_batches=20,
-        )
+    q_hailp = benchmark_quality(
+        "hailp",
+        checkpoint_dir=Path("checkpoints") if Path("checkpoints").exists() else None,
+        max_batches=50,
+        val_batches=100,
+        device=device,
+    )
+
+    q_baseline = None
+    if args.baseline:
+        try:
+            q_baseline = benchmark_quality(
+                "baseline",
+                checkpoint_dir=Path("checkpoints") if Path("checkpoints").exists() else None,
+                max_batches=50,
+                val_batches=100,
+                device=device,
+            )
+        except Exception:
+            q_baseline = benchmark_quality(
+                "baseline",
+                checkpoint_dir=None,
+                max_batches=10,
+                val_batches=20,
+                device=device,
+            )
 
     fig3, ax3 = plt.subplots()
-    models = ["Baseline GPT", "H(AI)LP RWKV"]
-    ppl = [q_baseline["perplexity"], q_hailp["perplexity"]]
-    ax3.bar(models, ppl, color=["#1f77b4", "#ff7f0e"])
+    if args.baseline and q_baseline is not None:
+        models = ["Baseline GPT", "H(AI)LP RWKV"]
+        ppl = [q_baseline["perplexity"], q_hailp["perplexity"]]
+        ax3.bar(models, ppl, color=["#1f77b4", "#ff7f0e"])
+    else:
+        ax3.bar(["H(AI)LP RWKV"], [q_hailp["perplexity"]], color=["#ff7f0e"])
+
     ax3.set_ylabel("Validation perplexity")
-    ax3.set_title("Quality comparison (lower is better)")
+    ax3.set_title("Quality (lower is better)")
     quality_img = _fig_to_base64(fig3)
 
     html = generate_report_html(mem_img, speed_img, quality_img)

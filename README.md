@@ -53,27 +53,52 @@ uv run python demo.py
 
 **Note:** No Hugging Face account or token is required. The dataset and tokenizer are public. If you hit rate limits, set `HF_TOKEN` or run `huggingface-cli login` for higher limits.
 
-## Training
+## DirectML
 
-**Smoke test** (both models, 200 steps, no W&B; good for CI or a quick sanity check):
+If you have an AMD GPU on Windows, you can run training with DirectML.
+
+Recommended Python version: `3.11` (DirectML can have issues on `3.12`).
+
+Install DirectML:
 
 ```powershell
-uv run python train.py --model both --steps 200 --batch-size 4 --no-wandb
+pip install torch-directml
+```
+
+Verify DirectML is working:
+
+```powershell
+python scripts/verify_dml.py
+```
+
+DirectML training smoke test (H(AI)LP):
+
+```powershell
+uv run python train.py --steps 200 --no-wandb
+```
+
+Notes:
+- This repo enables AMP (`GradScaler`/`autocast`) only for CUDA devices; DirectML runs FP32.
+
+## Training
+
+**Smoke test** (H(AI)LP only, 200 steps, no W&B; good for CI or a quick sanity check):
+
+```powershell
+uv run python train.py --steps 200 --batch-size 4 --no-wandb
 ```
 
 **Full run** with Weights & Biases (perplexity and curves; ~30k steps per model):
 
 ```powershell
 # Log in to W&B first if needed: uv run wandb login
-uv run python train.py --model both
-# Or one model: uv run python train.py --model baseline
-uv run python train.py --model hailp
+uv run python train.py
 ```
 
 Resume from the latest checkpoint:
 
 ```powershell
-uv run python train.py --model both --resume
+uv run python train.py --resume
 ```
 
 Checkpoints are saved under `checkpoints/<model>/` (rotating last 3 + `best.pt`).
@@ -91,8 +116,8 @@ Checkpoints are saved under `checkpoints/<model>/` (rotating last 3 + `best.pt`)
   ```
 - **Quality** — validation loss and perplexity (random init or from checkpoints):
   ```powershell
-  uv run python benchmarks/quality_eval.py --model both --max-batches 50
-  uv run python benchmarks/quality_eval.py --model both --checkpoint-dir checkpoints --max-batches 100
+  uv run python benchmarks/quality_eval.py --model hailp --max-batches 50
+  uv run python benchmarks/quality_eval.py --model hailp --checkpoint-dir checkpoints --max-batches 100
   ```
 
 ## Architecture Key Differences

@@ -433,10 +433,10 @@ def train_loop(
         total_steps=config["total_steps"],
     )
 
-    # Mixed precision -- only meaningful on CUDA
+    # Mixed precision (GradScaler + CUDA autocast) is CUDA-only.
     use_amp = (
         config.get("mixed_precision") in ("bf16", "fp16")
-        and torch.cuda.is_available()
+        and device.type == "cuda"
     )
     scaler = GradScaler() if use_amp else None
 

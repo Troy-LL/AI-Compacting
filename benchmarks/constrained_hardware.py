@@ -29,9 +29,9 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 import torch
 
-from models.baseline_gpt import BaselineConfig, BaselineGPT
 from models.hailp_model import HAILPConfig, HAILPModel
 from training.trainer import ram_mb
+from training.device import DEVICE as DEFAULT_DEVICE, DEVICE_NAME
 
 
 @dataclass
@@ -42,7 +42,9 @@ class ConstrainedResult:
     peak_ram_mb: float
 
 
-def _build_baseline() -> BaselineGPT:
+def _build_baseline():
+    from models.baseline_gpt import BaselineConfig, BaselineGPT
+
     cfg = BaselineConfig(
         layers=6,
         hidden_dim=512,
@@ -89,7 +91,7 @@ def benchmark_under_memory_constraint(
       "over budget".
     """
     if device is None:
-        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        device = DEFAULT_DEVICE
 
     model.to(device).eval()
 
@@ -148,7 +150,7 @@ def _print_results(results: list[ConstrainedResult], ram_limit_mb: float) -> Non
 
 def main() -> None:
     parser = argparse.ArgumentParser(
-        description="Simulate RAM-constrained devices for Baseline vs H(AI)LP.",
+        description="Simulate RAM-constrained devices for H(AI)LP (optional Baseline GPT).",
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
     )
     parser.add_argument(
@@ -156,6 +158,11 @@ def main() -> None:
         type=float,
         default=500.0,
         help="Soft RAM budget to compare against (MB).",
+    )
+    parser.add_argument(
+        "--baseline",
+        action="store_true",
+        help="Also compute Baseline GPT points.",
     )
     parser.add_argument(
         "--seq-lens",
@@ -166,23 +173,25 @@ def main() -> None:
     )
     args = parser.parse_args()
 
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    device = DEFAULT_DEVICE
     print("=" * 80)
     print("H(AI)LP Constrained Hardware Benchmark (soft RAM budget)")
     print("=" * 80)
-    print(f"  Device: {device}  |  budget: {args.ram_limit_mb:.0f} MB")
+    print(f"  Runs on: {DEVICE_NAME}  |  budget: {args.ram_limit_mb:.0f} MB")
     print()
 
-    baseline = _build_baseline()
     hailp = _build_hailp()
 
-    baseline_results = benchmark_under_memory_constraint(
-        baseline,
-        "Baseline GPT",
-        seq_lens=args.seq_lens,
-        ram_limit_mb=args.ram_limit_mb,
-        device=device,
-    )
+    baseline_results = []
+    if args.baseline:
+        baseline = _build_baseline()
+        baseline_results = benchmark_under_memory_constraint(
+            baseline,
+            "Baseline GPT",
+            seq_lens=args.seq_lens,
+            ram_limit_mb=args.ram_limit_mb,
+            device=device,
+        )
     hailp_results = benchmark_under_memory_constraint(
         hailp,
         "H(AI)LP RWKV",
