@@ -234,6 +234,11 @@ def main() -> None:
         config["checkpoint_every"] = min(
             config["checkpoint_every"], max(args.steps // 5, 1)
         )
+        # Keep smoke tests quick by shrinking the materialised validation set.
+        # Otherwise `val_batches=200` can trigger long HF downloads/timeouts.
+        config["val_batches"] = min(
+            config["val_batches"], max(10, args.steps // 10)
+        )
     if args.batch_size is not None:
         config["batch_size"] = args.batch_size
     if args.seq_len is not None:

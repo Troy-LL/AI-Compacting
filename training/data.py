@@ -206,8 +206,9 @@ def get_dataloaders(
     resolved_persistent_workers = False
 
     if is_directml:
-        # Windows sweet spot for multiprocessing; avoid pinning for DirectML.
-        resolved_num_workers = 2 if num_workers == 0 else num_workers
+        # For DirectML + HF streaming, default to single-process loading to
+        # avoid shard/worker warnings and reduce overhead.
+        resolved_num_workers = num_workers
         resolved_pin_memory = False
         if resolved_num_workers > 0:
             resolved_persistent_workers = True

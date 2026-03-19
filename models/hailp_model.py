@@ -121,8 +121,9 @@ class RWKVTimeMixing(nn.Module):
         # Initialised to small negative values so decay starts near 1 (slow forgetting)
         self.time_decay = nn.Parameter(torch.ones(hidden_dim) * -0.5)
 
-        # Time shift (RWKV lerp between current token and previous token)
-        self.time_shift = nn.ZeroPad2d((0, 0, 1, -1))  # shifts sequence dim by 1
+        # Time shift (RWKV lerp between current token and previous token).
+        # NOTE: Avoid padding ops with mixed positive/negative values because
+        # torch-directml has current limitations here.
 
         self.dropout = nn.Dropout(dropout)
         self.ln = nn.LayerNorm(hidden_dim)
@@ -156,8 +157,15 @@ class RWKVTimeMixing(nn.Module):
 
         x = self.ln(x)
 
-        # Time-shift: mix current token with previous token embeddings
-        x_shifted = self.time_shift(x)           # (B, T, C) — shifted by 1 position
+        # Time-shift: mix current token with previous token embeddings.
+        # Equivalent to shifting sequence dim by 1 and inserting zeros at t=0.
+        x_shifted = torch.cat(
+            [
+                torch.zeros(B, 1, C, device=x.device, dtype=x.dtype),
+                x[:, :-1, :],
+            ],
+            dim=1,
+        )  # (B, T, C)
         mix = 0.5 * x + 0.5 * x_shifted          # simple lerp (RWKV uses learned mix)
 
         q = self.w_q(mix)                         # (B, T, C)
