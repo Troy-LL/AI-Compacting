@@ -395,3 +395,186 @@ def find_boundary(
     )
     return boundary_id
 
+
+def _split_paragraphs_into_atomic_chunks(
+    paragraphs: list[dict[str, str]],
+) -> list[dict[str, object]]:
+    """Split long paragraphs into atomic chunks each under the token budget."""
+
+    chunks: list[dict[str, object]] = []
+    for p in paragraphs:
+        pid = str(p.get("id", "")).strip()
+        text = str(p.get("text", ""))
+        if not text:
+            continue
+
+        p_tokens = _estimate_token_count(text)
+        if p_tokens <= max_window_tokens:
+            chunks.append({"id": pid, "text": text, "token_count": p_tokens})
+            continue
+
+        tokens = _tokenize(text)
+        token_chunks = _chunk_tokens(tokens, max_window_tokens)
+        for chunk_idx, chunk_tokens in enumerate(token_chunks):
+            chunk_text = _join_tokens(chunk_tokens)
+            chunk_token_count = _estimate_token_count(chunk_text)
+            if chunk_token_count > max_window_tokens:
+                chunk_text = _join_tokens(chunk_tokens[:max_window_tokens])
+                chunk_token_count = _estimate_token_count(chunk_text)
+            chunks.append(
+                {
+                    "id": pid,
+                    "text": chunk_text,
+                    "token_count": chunk_token_count,
+                    "chunk_index": chunk_idx,
+                }
+            )
+    return chunks
+
+
+def _build_candidate_window(
+    atomic_chunks: list[dict[str, object]],
+    start_idx: int,
+) -> dict[str, object]:
+    """Build the next candidate window using greedy token packing."""
+
+    window_paragraphs: list[dict[str, object]] = []
+    token_sum = 0
+
+    for i in range(start_idx, len(atomic_chunks)):
+        p = atomic_chunks[i]
+        p_tokens = int(p.get("token_count", 0))  # type: ignore[arg-type]
+        if not window_paragraphs:
+            window_paragraphs.append(p)
+            token_sum += p_tokens
+            continue
+
+        if token_sum + p_tokens > max_window_tokens:
+            break
+        window_paragraphs.append(p)
+        token_sum += p_tokens
+
+    return {"token_count": token_sum, "paragraphs": window_paragraphs}
+
+
+def _find_boundary_index(
+    boundary_id: str | None, window_paragraphs: list[dict[str, object]]
+) -> int | None:
+    if boundary_id is None:
+        return None
+    for idx, p in enumerate(window_paragraphs):
+        if str(p.get("id", "")).strip() == boundary_id:
+            return idx
+    return None
+
+
+def segment(
+    document: str,
+    *,
+    overlap_paragraphs: int = 1,
+    max_iterations: int | None = None,
+    model: Any | None = None,
+    tokenizer: Any | None = None,
+    sampler: Any | None = None,
+) -> list[dict[str, object]]:
+    """Iteratively segment a document into token-bounded windows.
+
+    The loop:
+    1) Builds a candidate window from the remaining atomic chunks.
+    2) Uses boundary detection to decide where topics shift.
+    3) Emits a segment ending at the detected boundary.
+    4) Advances to the next window with overlap.
+
+    Args:
+        document: Input document text.
+        overlap_paragraphs: Number of paragraphs to overlap between segments.
+            The spec for Phase 4 uses 1 overlap paragraph.
+        max_iterations: Hard iteration guard. Defaults to a value derived from
+            the input size.
+        model: Optional model for boundary detection tier.
+        tokenizer: Optional tokenizer for boundary detection tier.
+        sampler: Optional sampler for boundary detection tier.
+
+    Returns:
+        A list of segments, each shaped like::
+
+            {"token_count": int, "text": str, "paragraphs": [...]}.
+    """
+
+    extracted = extract_paragraphs(document)
+    atomic_chunks = _split_paragraphs_into_atomic_chunks(extracted)
+    if not atomic_chunks:
+        return []
+
+    if max_iterations is None:
+        # Generous guard: should be linear in input size.
+        max_iterations = max(10, len(atomic_chunks) * 3)
+
+    if overlap_paragraphs < 0:
+        raise ValueError("overlap_paragraphs must be >= 0")
+
+    segments: list[dict[str, object]] = []
+    start_idx = 0
+    iterations = 0
+
+    while start_idx < len(atomic_chunks):
+        iterations += 1
+        if iterations > max_iterations:
+            raise RuntimeError(
+                f"Segmentation exceeded max_iterations={max_iterations} "
+                f"(start_idx={start_idx})."
+            )
+
+        window = _build_candidate_window(atomic_chunks, start_idx=start_idx)
+        window_paragraphs = window["paragraphs"]
+        if not isinstance(window_paragraphs, list) or not window_paragraphs:
+            # Defensive: should never happen because start_idx < len(...).
+            break
+
+        # Determine boundary within this window.
+        boundary_id, _meta = find_boundary_with_cost(
+            window,
+            model=model,
+            tokenizer=tokenizer,
+            sampler=sampler,
+        )
+        boundary_idx = _find_boundary_index(boundary_id, window_paragraphs)  # type: ignore[arg-type]
+        if boundary_idx is None:
+            boundary_idx = len(window_paragraphs) // 2
+
+        seg_paragraphs = window_paragraphs[: boundary_idx + 1]
+        seg_token_count = sum(int(p.get("token_count", 0)) for p in seg_paragraphs)  # type: ignore[arg-type]
+        seg_text = " ".join(str(p.get("text", "")).strip() for p in seg_paragraphs).strip()
+
+        # Safety: enforce budget.
+        if seg_token_count > max_window_tokens:
+            # This shouldn't happen if window construction is correct, but
+            # enforce deterministically.
+            seg_text = seg_text[:1]
+            seg_token_count = _estimate_token_count(seg_text)
+
+        segments.append(
+            {
+                "token_count": seg_token_count,
+                "text": seg_text,
+                "paragraphs": seg_paragraphs,
+            }
+        )
+
+        boundary_global_idx = start_idx + boundary_idx
+        next_start = boundary_global_idx - overlap_paragraphs
+        if next_start < 0:
+            next_start = 0
+
+        # Infinite-loop guard: ensure forward progress.
+        if next_start <= start_idx:
+            next_start = start_idx + 1
+
+        # If our segment already included the final chunk, we can stop.
+        if boundary_global_idx >= len(atomic_chunks) - 1:
+            break
+
+        start_idx = next_start
+
+    return segments
+

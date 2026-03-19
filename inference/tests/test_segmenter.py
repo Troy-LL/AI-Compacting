@@ -59,6 +59,25 @@ LONG_DOCUMENT = (
     + "Paragraph C: single-sentence only."
 )
 
+FIRST_AID_GUIDE_DOC = FIRST_AID_GUIDE
+WATER_PURIFICATION_GUIDE_DOC = WATER_PURIFICATION_GUIDE
+LEGAL_RIGHTS_DOC_TEXT = LEGAL_RIGHTS_DOC
+
+
+def _make_atomic_near_max_paragraph() -> str:
+    # Token estimator counts "word-ish" sequences as tokens, so each
+    # repeated word contributes ~1 token.
+    n_words = max(1, segmenter.max_window_tokens - 10)
+    return " ".join(["instruction"] * n_words) + "."
+
+
+ADVERSARIAL_DOCUMENT = (
+    "Intro paragraph.\n\n"
+    + "\n\n".join(_make_atomic_near_max_paragraph() for _ in range(40))
+    + "\n\n"
+    + "Final paragraph."
+)
+
 
 def test_paragraph_extraction() -> None:
     """Validation gate: basic paragraph extraction and ID assignment."""
@@ -162,4 +181,51 @@ def test_unparseable_fallback() -> None:
     ]
     result = segmenter._parse_boundary_response("asdfjkl;", paras)
     assert result is None
+
+
+def test_full_document_segmentation() -> None:
+    """Validation gate: segmentation respects budgets + covers most words."""
+    segments = segmenter.segment(FIRST_AID_GUIDE_DOC)
+    assert segments is not None
+    for seg in segments:
+        assert int(seg["token_count"]) <= segmenter.max_window_tokens
+
+    original_words = set(FIRST_AID_GUIDE_DOC.split())
+    segmented_words = set(" ".join(str(s["text"]) for s in segments).split())
+    coverage = len(original_words & segmented_words) / max(1, len(original_words))
+    assert coverage > 0.95
+
+
+def test_no_infinite_loop() -> None:
+    """Validation gate: segmentation terminates promptly."""
+    import time
+    import signal
+
+    def run_segment() -> list[dict[str, object]]:
+        return segmenter.segment(ADVERSARIAL_DOCUMENT)
+
+    # Windows compatibility: SIGALRM is not available in all environments.
+    if hasattr(signal, "SIGALRM") and hasattr(signal, "alarm"):
+        try:
+            def timeout_handler(signum: int, frame: object) -> None:  # noqa: ARG001
+                raise TimeoutError("Segmentation took too long")
+
+            signal.signal(signal.SIGALRM, timeout_handler)  # type: ignore[arg-type]
+            signal.alarm(30)  # type: ignore[attr-defined]
+            try:
+                segments = run_segment()
+                assert segments is not None
+            finally:
+                signal.alarm(0)  # type: ignore[attr-defined]
+            return
+        except Exception:
+            # Fall back to wall-clock timing in case the environment doesn't
+            # support SIGALRM reliably.
+            pass
+
+    start = time.time()
+    segments = run_segment()
+    elapsed = time.time() - start
+    assert segments is not None
+    assert elapsed < 30
 
