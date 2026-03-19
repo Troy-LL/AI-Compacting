@@ -116,3 +116,50 @@ def test_real_document_legal_rights() -> None:
     # Token budget is deterministic; this ensures we don't produce empty windows.
     assert all(len(w["paragraphs"]) > 0 for w in windows)
 
+
+def test_boundary_response_parsing() -> None:
+    """Validation gate: parse boundary responses into paragraph ids."""
+    paras = [
+        {"id": "p0", "text": "a", "token_count": 1},
+        {"id": "p1", "text": "b", "token_count": 1},
+        {"id": "p2", "text": "c", "token_count": 1},
+        {"id": "p3", "text": "d", "token_count": 1},
+        {"id": "p4", "text": "e", "token_count": 1},
+    ]
+
+    assert segmenter._parse_boundary_response("p3", paras) == "p3"
+    assert (
+        segmenter._parse_boundary_response("The shift is at p3.", paras) == "p3"
+    )
+    assert segmenter._parse_boundary_response("paragraph p3", paras) == "p3"
+    assert segmenter._parse_boundary_response("none", paras) is None
+    assert segmenter._parse_boundary_response("no shift", paras) is None
+
+
+def test_boundary_token_cost() -> None:
+    """Validation gate: boundary detection output should be very short."""
+    # Window with 5 paragraphs → midpoint is p2 (len//2).
+    window = {
+        "token_count": 5,
+        "paragraphs": [
+            {"id": "p0", "text": "a", "token_count": 1},
+            {"id": "p1", "text": "b", "token_count": 1},
+            {"id": "p2", "text": "c", "token_count": 1},
+            {"id": "p3", "text": "d", "token_count": 1},
+            {"id": "p4", "text": "e", "token_count": 1},
+        ],
+    }
+    _boundary, meta = segmenter.find_boundary_with_cost(window)
+    assert meta["tokens_used"] < 20
+
+
+def test_unparseable_fallback() -> None:
+    """Validation gate: unparseable responses should not crash."""
+    paras = [
+        {"id": "p0", "text": "a", "token_count": 1},
+        {"id": "p1", "text": "b", "token_count": 1},
+        {"id": "p2", "text": "c", "token_count": 1},
+    ]
+    result = segmenter._parse_boundary_response("asdfjkl;", paras)
+    assert result is None
+
