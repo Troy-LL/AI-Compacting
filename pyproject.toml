@@ -19,6 +19,7 @@ dependencies = [
     "tqdm>=4.66.0",
     "datasets>=2.19.0",
     "transformers>=4.40.0",
+    "matplotlib>=3.8.0",
 ]
 
 [project.optional-dependencies]
@@ -51,7 +52,7 @@ strict = true
 ignore_missing_imports = true
 
 [tool.pytest.ini_options]
-testpaths = ["tests"]
+testpaths = ["tests", "inference/tests"]
 addopts = "-v --tb=short"
 filterwarnings = ["ignore::DeprecationWarning"]
 
