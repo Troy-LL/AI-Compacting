@@ -64,3 +64,12 @@ memory_snapshots/
 
 # Logs
 *.log
+
+# Personal dev / AI assistant files (not project code)
+.Rules/
+.Skills/
+
+# Generated reports and Office docs
+*.html
+*.docx
+*.xlsx
