@@ -9,9 +9,10 @@ Compared to `memory_benchmark.py` (which focuses on KV cache vs fixed
 state in bytes), this script uses the more user-facing `ram_at_seq`
 utility from `training.trainer` to measure end-to-end process memory.
 
-Run (baseline vs H(AI)LP side by side):
+Run (H(AI)LP only by default; optional Baseline GPT):
 
     python benchmarks/memory_profile.py
+    python benchmarks/memory_profile.py --baseline
 
 The core API is ``benchmark_memory_vs_sequence_length`` which you can
 reuse from notebooks or other scripts.
@@ -29,9 +30,9 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 import torch
 
-from models.baseline_gpt import BaselineConfig, BaselineGPT
 from models.hailp_model import HAILPConfig, HAILPModel
 from training.trainer import ram_at_seq
+from training.device import DEVICE as DEFAULT_DEVICE, DEVICE_NAME
 
 
 @dataclass
@@ -79,7 +80,7 @@ def benchmark_memory_vs_sequence_length(
     if sequence_lengths is None:
         sequence_lengths = [64, 128, 256, 512, 1024, 2048, 4096]
     if device is None:
-        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        device = DEFAULT_DEVICE
 
     model.to(device).eval()
 
@@ -118,23 +119,26 @@ def _print_table(points: List[MemoryPoint]) -> None:
 
 
 def main() -> None:
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    import argparse
+
+    parser = argparse.ArgumentParser(
+        description="H(AI)LP memory profile (RAM delta vs sequence length); optional Baseline GPT"
+    )
+    parser.add_argument(
+        "--baseline",
+        action="store_true",
+        help="Also compute Baseline GPT memory points.",
+    )
+    args = parser.parse_args()
+
+    device = DEFAULT_DEVICE
     print("=" * 80)
     print("H(AI)LP Memory Profile: RAM vs sequence length (forward pass)")
     print("=" * 80)
-    print(f"  Device: {device}")
+    print(f"  Runs on: {DEVICE_NAME}  ({device})")
     print()
 
     # Match configs used in other benchmarks (8k vocab for compactness).
-    baseline_cfg = BaselineConfig(
-        layers=6,
-        hidden_dim=512,
-        attention_heads=8,
-        ffn_expansion=4,
-        vocab_size=8000,
-        context_window=4096,
-        dropout=0.0,
-    )
     hailp_cfg = HAILPConfig(
         layers=12,
         hidden_dim=512,
@@ -145,20 +149,10 @@ def main() -> None:
         dropout=0.0,
     )
 
-    baseline = BaselineGPT(baseline_cfg)
     hailp = HAILPModel(hailp_cfg)
 
     seq_lens = [64, 128, 256, 512, 1024, 2048, 4096]
 
-    baseline_points = benchmark_memory_vs_sequence_length(
-        baseline,
-        "Baseline GPT",
-        sequence_lengths=seq_lens,
-        device=device,
-        is_recurrent=False,
-        batch_size=1,
-        vocab_size=baseline_cfg.vocab_size,
-    )
     hailp_points = benchmark_memory_vs_sequence_length(
         hailp,
         "H(AI)LP RWKV",
@@ -169,12 +163,38 @@ def main() -> None:
         vocab_size=hailp_cfg.vocab_size,
     )
 
-    all_points = baseline_points + hailp_points
+    all_points = hailp_points[:]
+    if args.baseline:
+        from models.baseline_gpt import BaselineConfig, BaselineGPT
+
+        baseline_cfg = BaselineConfig(
+            layers=6,
+            hidden_dim=512,
+            attention_heads=8,
+            ffn_expansion=4,
+            vocab_size=8000,
+            context_window=4096,
+            dropout=0.0,
+        )
+        baseline = BaselineGPT(baseline_cfg)
+
+        baseline_points = benchmark_memory_vs_sequence_length(
+            baseline,
+            "Baseline GPT",
+            sequence_lengths=seq_lens,
+            device=device,
+            is_recurrent=False,
+            batch_size=1,
+            vocab_size=baseline_cfg.vocab_size,
+        )
+        all_points = baseline_points + hailp_points
+
     _print_table(all_points)
 
     print()
     print("Key intuition:")
-    print("  - Baseline GPT: RAM should grow roughly linearly with sequence length.")
+    if args.baseline:
+        print("  - Baseline GPT: RAM should grow roughly linearly with sequence length.")
     print("  - H(AI)LP RWKV: additional RAM per token is close to flat (fixed state).")
     print("Use this table as the numeric backbone for your hero RAM vs seq-length graph.")
 

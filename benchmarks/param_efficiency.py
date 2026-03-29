@@ -1,4 +1,4 @@
-"""Parameter efficiency benchmark for Baseline GPT vs H(AI)LP RWKV.
+"""Parameter efficiency benchmark for H(AI)LP RWKV (optionally compare vs Baseline GPT).
 
 This focuses on:
 
@@ -21,8 +21,8 @@ from typing import List
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from models.baseline_gpt import BaselineConfig, BaselineGPT
 from models.hailp_model import HAILPConfig, HAILPModel
+import argparse
 
 
 @dataclass
@@ -39,7 +39,9 @@ class ParamRow:
         return self.total_params / self.size_mb_fp32
 
 
-def _build_baseline() -> BaselineGPT:
+def _build_baseline():
+    from models.baseline_gpt import BaselineConfig, BaselineGPT
+
     cfg = BaselineConfig(
         layers=6,
         hidden_dim=512,
@@ -105,18 +107,32 @@ def _print_table(rows: List[ParamRow]) -> None:
 
 
 def main() -> None:
+    parser = argparse.ArgumentParser(
+        description="H(AI)LP parameter efficiency (optional Baseline GPT comparison)"
+    )
+    parser.add_argument(
+        "--baseline",
+        action="store_true",
+        help="Also compute Baseline GPT stats.",
+    )
+    args = parser.parse_args()
+
     print("=" * 72)
     print("H(AI)LP Parameter Efficiency Benchmark")
     print("=" * 72)
     print()
 
-    baseline = _build_baseline()
     hailp = _build_hailp()
 
-    baseline_row = benchmark_param_efficiency(baseline, "Baseline GPT")
     hailp_row = benchmark_param_efficiency(hailp, "H(AI)LP RWKV")
 
-    _print_table([baseline_row, hailp_row])
+    rows = [hailp_row]
+    if args.baseline:
+        baseline = _build_baseline()
+        baseline_row = benchmark_param_efficiency(baseline, "Baseline GPT")
+        rows = [baseline_row, hailp_row]
+
+    _print_table(rows)
 
     print()
     print("Interpretation:")

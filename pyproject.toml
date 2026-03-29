@@ -9,7 +9,7 @@ packages = ["models", "training", "benchmarks"]
 name = "hailp"
 version = "0.1.0"
 description = "H(AI)LP — Architecture comparison: Baseline GPT vs H(AI)LP RWKV at 50M parameters"
-requires-python = ">=3.12"
+requires-python = ">=3.11"
 dependencies = [
     "torch>=2.2.0",
     "pyyaml>=6.0",
@@ -19,6 +19,7 @@ dependencies = [
     "tqdm>=4.66.0",
     "datasets>=2.19.0",
     "transformers>=4.40.0",
+    "matplotlib>=3.8.0",
 ]
 
 [project.optional-dependencies]
@@ -27,6 +28,9 @@ dev = [
     "pytest-cov>=5.0.0",
     "ruff>=0.4.0",
     "mypy>=1.10.0",
+]
+directml = [
+    "torch-directml",
 ]
 
 [tool.uv]
@@ -51,7 +55,7 @@ strict = true
 ignore_missing_imports = true
 
 [tool.pytest.ini_options]
-testpaths = ["tests"]
+testpaths = ["tests", "inference/tests"]
 addopts = "-v --tb=short"
 filterwarnings = ["ignore::DeprecationWarning"]
 

@@ -1,4 +1,4 @@
-"""Memory benchmark: Baseline GPT (growing KV cache) vs H(AI)LP RWKV (fixed state).
+"""Memory benchmark: H(AI)LP fixed state (optionally include Baseline GPT KV cache).
 
 Run:
     python benchmarks/memory_benchmark.py
@@ -15,20 +15,11 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 import torch
 
-from models.baseline_gpt import BaselineConfig, BaselineGPT
 from models.hailp_model import HAILPConfig, HAILPModel
 
 # ── Config ─────────────────────────────────────────────────────────────────────
 
-BASELINE_CFG = BaselineConfig(
-    layers=6,
-    hidden_dim=512,
-    attention_heads=8,
-    ffn_expansion=4,
-    vocab_size=8000,
-    context_window=512,
-    dropout=0.0,
-)
+BASELINE_CFG = None  # loaded lazily when --baseline is passed
 
 HAILP_CFG = HAILPConfig(
     layers=12,
@@ -47,6 +38,20 @@ BATCH_SIZE = 1
 
 def run_baseline_benchmark(seq_lens: list[int]) -> list[dict]:
     """Measure baseline KV cache growth."""
+    from models.baseline_gpt import BaselineConfig, BaselineGPT
+
+    global BASELINE_CFG
+    if BASELINE_CFG is None:
+        BASELINE_CFG = BaselineConfig(
+            layers=6,
+            hidden_dim=512,
+            attention_heads=8,
+            ffn_expansion=4,
+            vocab_size=8000,
+            context_window=512,
+            dropout=0.0,
+        )
+
     model = BaselineGPT(BASELINE_CFG)
     model.eval()
     results = []
@@ -123,24 +128,40 @@ def print_table(rows: list[dict]) -> None:
 
 
 def main() -> None:
+    import argparse
+
+    parser = argparse.ArgumentParser(
+        description="H(AI)LP memory benchmark (fixed state); optional Baseline GPT comparisons"
+    )
+    parser.add_argument(
+        "--baseline",
+        action="store_true",
+        help="Also compute Baseline GPT KV cache growth.",
+    )
+    args = parser.parse_args()
+
     print("=" * 80)
-    print("H(AI)LP Memory Benchmark: KV Cache Growth vs Fixed Recurrent State")
+    print("H(AI)LP Memory Benchmark: Fixed Recurrent State")
     print("=" * 80)
     print()
 
-    baseline_results = run_baseline_benchmark(SEQUENCE_LENGTHS)
     hailp_results = run_hailp_benchmark(SEQUENCE_LENGTHS)
 
-    # Interleave results for easy comparison
-    combined = []
-    for b, l in zip(baseline_results, hailp_results):
-        combined.append(b)
-        combined.append(l)
+    combined = hailp_results[:]
+    baseline_results = None
+    if args.baseline:
+        baseline_results = run_baseline_benchmark(SEQUENCE_LENGTHS)
+        # Interleave results for easy comparison
+        combined = []
+        for b, l in zip(baseline_results, hailp_results):
+            combined.append(b)
+            combined.append(l)
 
     print_table(combined)
     print()
     print("Key result:")
-    print("  Baseline KV cache grows linearly with sequence length.")
+    if args.baseline:
+        print("  Baseline KV cache grows linearly with sequence length.")
     print("  H(AI)LP RWKV state is CONSTANT regardless of sequence length.")
     print()
 
@@ -151,11 +172,12 @@ def main() -> None:
     )
     print("PASS: H(AI)LP state is constant across all sequence lengths.")
 
-    baseline_bytes = [r["total_memory_bytes"] for r in baseline_results]
-    assert baseline_bytes[-1] > baseline_bytes[0], (
-        "FAIL: Baseline KV cache did not grow!"
-    )
-    print("PASS: Baseline KV cache grows with sequence length.")
+    if args.baseline and baseline_results is not None:
+        baseline_bytes = [r["total_memory_bytes"] for r in baseline_results]
+        assert baseline_bytes[-1] > baseline_bytes[0], (
+            "FAIL: Baseline KV cache did not grow!"
+        )
+        print("PASS: Baseline KV cache grows with sequence length.")
 
 
 if __name__ == "__main__":

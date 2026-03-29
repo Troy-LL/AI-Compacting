@@ -164,6 +164,7 @@ def get_dataloaders(
     batch_size: int = 16,
     num_workers: int = 0,
     val_batches: int = 200,
+    device: torch.device | None = None,
 ) -> tuple[DataLoader, DataLoader]:
     """Return (train_loader, val_loader) for Simple English Wikipedia.
 
@@ -177,6 +178,8 @@ def get_dataloaders(
         DataLoader workers.  Default 0 is safe on Windows and macOS.
     val_batches :
         Number of batches materialised into RAM for validation.
+    device :
+        Optional device used to apply DirectML-friendly DataLoader settings.
 
     Returns
     -------
@@ -192,12 +195,34 @@ def get_dataloaders(
         n=val_batches * batch_size,
     )
 
-    train_loader = DataLoader(
-        train_ds,
-        batch_size=batch_size,
-        num_workers=num_workers,
-        pin_memory=torch.cuda.is_available(),
-    )
+    directml_device_types = {"privateuseone", "directml"}
+    is_directml = device is not None and device.type in directml_device_types
+    is_cuda = device is not None and device.type == "cuda"
+
+    # Keep existing behavior when device is not provided.
+    resolved_pin_memory = torch.cuda.is_available() if device is None else is_cuda
+
+    resolved_num_workers = num_workers
+    resolved_persistent_workers = False
+
+    if is_directml:
+        # For DirectML + HF streaming, default to single-process loading to
+        # avoid shard/worker warnings and reduce overhead.
+        resolved_num_workers = num_workers
+        resolved_pin_memory = False
+        if resolved_num_workers > 0:
+            resolved_persistent_workers = True
+
+    train_kwargs: dict = {
+        "batch_size": batch_size,
+        "num_workers": resolved_num_workers,
+        "pin_memory": resolved_pin_memory,
+    }
+    if resolved_persistent_workers:
+        train_kwargs["persistent_workers"] = True
+        train_kwargs["prefetch_factor"] = 2
+
+    train_loader = DataLoader(train_ds, **train_kwargs)
     val_loader = DataLoader(
         val_ds,
         batch_size=batch_size,

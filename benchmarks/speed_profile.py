@@ -1,4 +1,4 @@
-"""Speed benchmark: tokens/second for Baseline GPT vs H(AI)LP RWKV.
+"""Speed benchmark: tokens/second for H(AI)LP (optionally compare vs Baseline GPT).
 
 Measures forward-pass throughput at various sequence lengths and batch sizes.
 Useful for comparing O(n²) attention vs O(n) recurrent scaling.
@@ -22,20 +22,12 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 import torch
 
-from models.baseline_gpt import BaselineConfig, BaselineGPT
 from models.hailp_model import HAILPConfig, HAILPModel
+from training.device import DEVICE as DEFAULT_DEVICE, DEVICE_NAME
 
 # ── Config (match memory_benchmark / training) ───────────────────────────────────
 
-BASELINE_CFG = BaselineConfig(
-    layers=6,
-    hidden_dim=512,
-    attention_heads=8,
-    ffn_expansion=4,
-    vocab_size=8000,
-    context_window=512,
-    dropout=0.0,
-)
+BASELINE_CFG = None  # loaded lazily when --baseline is passed
 
 HAILP_CFG = HAILPConfig(
     layers=12,
@@ -68,13 +60,17 @@ def _tokens_per_second(
     total_tokens = batch_size * seq_len * repeats
     x = torch.randint(0, vocab_size, (batch_size, seq_len), device=device)
 
+    def sync_out(out: object) -> None:
+        if isinstance(out, tuple):
+            out = out[0]
+        assert isinstance(out, torch.Tensor)
+        _ = out.reshape(-1)[0].item()
+
     # Warmup
     with torch.no_grad():
         for _ in range(warmup):
-            if is_recurrent:
-                _ = model(x)
-            else:
-                _ = model(x)
+            out = model(x)
+            sync_out(out)
 
     if device.type == "cuda":
         torch.cuda.synchronize()
@@ -83,10 +79,8 @@ def _tokens_per_second(
     start = time.perf_counter()
     with torch.no_grad():
         for _ in range(repeats):
-            if is_recurrent:
-                _ = model(x)
-            else:
-                _ = model(x)
+            out = model(x)
+            sync_out(out)
     if device.type == "cuda":
         torch.cuda.synchronize()
     elapsed = time.perf_counter() - start
@@ -102,6 +96,20 @@ def run_baseline_speed(
     repeats: int = DEFAULT_REPEATS,
 ) -> list[dict]:
     """Baseline GPT forward-pass speed at each seq_len."""
+    from models.baseline_gpt import BaselineConfig, BaselineGPT
+
+    global BASELINE_CFG
+    if BASELINE_CFG is None:
+        BASELINE_CFG = BaselineConfig(
+            layers=6,
+            hidden_dim=512,
+            attention_heads=8,
+            ffn_expansion=4,
+            vocab_size=8000,
+            context_window=512,
+            dropout=0.0,
+        )
+
     model = BaselineGPT(BASELINE_CFG).to(device).eval()
     results = []
     for seq in seq_lens:
@@ -197,8 +205,10 @@ def print_table(rows: list[dict]) -> None:
 
 
 def main() -> None:
+    import argparse
+
     parser = argparse.ArgumentParser(
-        description="H(AI)LP speed benchmark: tokens/sec for Baseline vs H(AI)LP",
+        description="H(AI)LP speed benchmark: tokens/sec",
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
     )
     parser.add_argument(
@@ -227,6 +237,11 @@ def main() -> None:
         help="Repeated forward passes for timing",
     )
     parser.add_argument(
+        "--baseline",
+        action="store_true",
+        help="Also compute Baseline GPT speed.",
+    )
+    parser.add_argument(
         "--device",
         choices=("cpu", "cuda", "auto"),
         default="auto",
@@ -234,33 +249,39 @@ def main() -> None:
     )
     args = parser.parse_args()
 
-    device = (
-        torch.device("cuda" if torch.cuda.is_available() else "cpu")
-        if args.device == "auto"
-        else torch.device(args.device)
-    )
+    if args.device == "auto":
+        device = DEFAULT_DEVICE
+        print(f"Detected device: {DEVICE_NAME} ({device})")
+    else:
+        device = torch.device(args.device)
     print("=" * 60)
-    print("H(AI)LP Speed Benchmark: Baseline GPT vs H(AI)LP RWKV")
+    print("H(AI)LP Speed Benchmark")
     print("=" * 60)
     print(f"  Device: {device}  |  batch_size={args.batch_size}")
-    print(f"  seq_lens: {args.seq_lens}  |  warmup={args.warmup}  repeats={args.repeats}")
+    print(
+        f"  seq_lens: {args.seq_lens}  |  warmup={args.warmup}  repeats={args.repeats}"
+    )
     print()
 
-    baseline_results = run_baseline_speed(
-        args.seq_lens, args.batch_size, device, args.warmup, args.repeats
-    )
     hailp_results = run_hailp_speed(
         args.seq_lens, args.batch_size, device, args.warmup, args.repeats
     )
 
-    combined = []
-    for b, h in zip(baseline_results, hailp_results):
-        combined.append(b)
-        combined.append(h)
+    combined = hailp_results[:]
+    if args.baseline:
+        baseline_results = run_baseline_speed(
+            args.seq_lens, args.batch_size, device, args.warmup, args.repeats
+        )
+        combined = []
+        for b, h in zip(baseline_results, hailp_results):
+            combined.append(b)
+            combined.append(h)
+
     print_table(combined)
     print()
-    print("  Baseline uses O(n²) attention; H(AI)LP uses O(n) time-mixing.")
-    print("  At long sequences, H(AI)LP can show better scaling.")
+    if args.baseline:
+        print("  Baseline uses O(n²) attention; H(AI)LP uses O(n) time-mixing.")
+        print("  At long sequences, H(AI)LP can show better scaling.")
 
 
 if __name__ == "__main__":
