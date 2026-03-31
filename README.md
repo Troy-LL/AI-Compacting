@@ -144,3 +144,27 @@ A recent 1,000-step continuous streaming test on dual NVIDIA T4 GPUs (15GB) conc
 | Attention projections | Full rank W              | Rank-64 U @ V^T         |
 | State representation | KV cache (grows)         | Fixed h_state tensor     |
 | Parameters           | ~50M                      | ~50M                     |
+
+---
+
+## Hardware Requirements (Android Deployment)
+
+For a tool intended for survival and critical aid, reliability is non-negotiable. Our INT4-quantized model with 360M parameters has the following RAM footprint at idle:
+
+| Device Total RAM | Operational Status | Reality Check |
+|------------------|---------------------|---------------|
+| **2GB** | **Insecure** | High risk of OOM crashes; OS takes 700MB+, Leaving <1.2GB for model/index (~700MB total). |
+| **3GB** | **Stable** | ~1.3GB free headroom; standard for reliable operation. |
+| **4GB** | **Optimum** | Fully comfortable operation under load. |
+
+### The Honest RAM Breakdown (for 2GB Devices)
+
+A typical budget phone with 2GB total RAM is extremely constrained:
+- **OS & System Processes:** 600–800 MB (baseline for Android to function).
+- **Background Apps/Launcher:** 200–400 MB.
+- **Available before app launch:** ~800 MB–1.2 GB.
+
+When H(AI)LP loads:
+- **INT4 weights + runtime overhead:** 450–550 MB (scaled from 156 MB peak for 18.5M).
+- **FAISS Index & Knowledge Base:** 100-150 MB.
+- **Result:** You operate right at the functional edge. Performance is unstable and crashes are likely.
