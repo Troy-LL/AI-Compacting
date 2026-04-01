@@ -11,32 +11,44 @@ H(AI)LP RWKV replaces this with a **fixed-size recurrent state** that never grow
 
 ```
 H(AI)LP/
-├── src/hailp/          # Core library (models, training, inference)
-│   ├── models/         # Model architectures & components
-│   ├── training/       # Data loading & trainer logic
-│   ├── inference/      # Multi-tier response pipeline
-│   └── benchmarks/     # Performance & quality profiling
-├── scripts/            # Runnable entrypoints
-│   ├── train.py        # Single-GPU training
-│   ├── train_multi.py  # Multi-GPU (Accelerate) training
-│   ├── demo.py         # Side-by-side comparison demo
-│   └── demo/           # Demo-specific reports & comparison logic
-├── tests/              # Structured pytest suite
-├── configs/            # Model & training configurations
-├── docs/               # Technical documentation & design docs
-└── reports/            # Generated benchmarks & results
+├── configs/
+│   ├── baseline.yaml       # Standard GPT config (O(n²) attention, KV cache)
+│   └── hailp.yaml         # H(AI)LP RWKV config (O(n) recurrent, fixed state)
+├── models/
+│   ├── components/
+│   │   ├── low_rank.py     # Rank-r weight factorization (U @ V^T)
+│   │   ├── param_sharing.py # Cross-layer FFN weight sharing
+│   │   └── adapter.py      # Language adapter injection points
+│   ├── baseline_gpt.py     # Baseline GPT implementation
+│   └── hailp_model.py     # H(AI)LP RWKV implementation
+├── training/
+│   ├── data.py             # Streaming Wikipedia tokenisation
+│   └── trainer.py          # Training loop with W&B hooks
+├── benchmarks/
+│   ├── memory_benchmark.py # RAM usage vs sequence length
+│   ├── speed_profile.py    # Tokens/sec at various seq lengths
+│   └── quality_eval.py     # Validation loss & perplexity (optional checkpoint)
+├── demo.py                 # Side-by-side comparison (run this first!)
+└── tests/
+    ├── test_components.py
+    ├── test_baseline.py
+    └── test_hailp.py
+```
 
 ## Quick Start
 
 ```powershell
+# Install uv (if not installed)
+winget install astral-sh.uv
+
 # Install dependencies
 uv sync
 
-# Run all tests (everything must pass!)
-uv run python -m pytest tests/ -v
+# Run all tests (everything must pass before training)
+uv run pytest tests/ -v
 
 # Run the demo comparison
-uv run python scripts/demo.py
+uv run python demo.py
 ```
 
 **Note:** No Hugging Face account or token is required. The dataset and tokenizer are public. If you hit rate limits, set `HF_TOKEN` or run `huggingface-cli login` for higher limits.
@@ -73,39 +85,39 @@ Notes:
 **Smoke test** (H(AI)LP only, 200 steps, no W&B; good for CI or a quick sanity check):
 
 ```powershell
-uv run python scripts/train.py --steps 200 --batch-size 4 --no-wandb
+uv run python train.py --steps 200 --batch-size 4 --no-wandb
 ```
 
 **Full run** with Weights & Biases (perplexity and curves; ~30k steps per model):
 
 ```powershell
 # Log in to W&B first if needed: uv run wandb login
-uv run python scripts/train.py
+uv run python train.py
 ```
 
 Resume from the latest checkpoint:
 
 ```powershell
-uv run python scripts/train.py --resume
+uv run python train.py --resume
 ```
+
+Checkpoints are saved under `checkpoints/<model>/` (rotating last 3 + `best.pt`).
 
 ## Benchmarks
 
-All profiling scripts are part of the `hailp` package and should be run using `python -m`:
-
 - **Memory** — KV cache growth vs fixed recurrent state:
   ```powershell
-  uv run python -m hailp.benchmarks.memory_profile
+  uv run python benchmarks/memory_benchmark.py
   ```
 - **Speed** — tokens/second at different sequence lengths:
   ```powershell
-  uv run python -m hailp.benchmarks.speed_profile
-  uv run python -m hailp.benchmarks.speed_profile --batch-size 8 --seq-lens 64 256 512
+  uv run python benchmarks/speed_profile.py
+  uv run python benchmarks/speed_profile.py --batch-size 8 --seq-lens 64 256 512
   ```
 - **Quality** — validation loss and perplexity (random init or from checkpoints):
   ```powershell
-  uv run python -m hailp.benchmarks.quality_eval --model hailp --max-batches 50
-  uv run python -m hailp.benchmarks.quality_eval --model hailp --checkpoint-dir checkpoints --max-batches 100
+  uv run python benchmarks/quality_eval.py --model hailp --max-batches 50
+  uv run python benchmarks/quality_eval.py --model hailp --checkpoint-dir checkpoints --max-batches 100
   ```
 
 ## Multi-GPU Training Results (Kaggle Dual-T4)
@@ -156,3 +168,9 @@ When H(AI)LP loads:
 - **INT4 weights + runtime overhead:** 450–550 MB (scaled from 156 MB peak for 18.5M).
 - **FAISS Index & Knowledge Base:** 100-150 MB.
 - **Result:** You operate right at the functional edge. Performance is unstable and crashes are likely.
+
+---
+
+## License
+
+This project is licensed under the **Apache License 2.0** — see the [LICENSE](LICENSE) file for details. This license was chosen for its permissive nature and its specific protections for patents, which is the industry standard for modern AI/ML software.
