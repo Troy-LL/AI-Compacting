@@ -168,3 +168,9 @@ When H(AI)LP loads:
 - **INT4 weights + runtime overhead:** 450–550 MB (scaled from 156 MB peak for 18.5M).
 - **FAISS Index & Knowledge Base:** 100-150 MB.
 - **Result:** You operate right at the functional edge. Performance is unstable and crashes are likely.
+
+---
+
+## License
+
+This project is licensed under the **Apache License 2.0** — see the [LICENSE](LICENSE) file for details. This license was chosen for its permissive nature and its specific protections for patents, which is the industry standard for modern AI/ML software.
