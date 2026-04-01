@@ -34,8 +34,8 @@ import torch
 from torch.cuda.amp import GradScaler
 
 from models.hailp_model import HAILPConfig, HAILPModel
-from training.device import DEVICE as DEFAULT_DEVICE
 from training.data import get_dataloaders
+from training.device import DEVICE as DEFAULT_DEVICE
 from training.trainer import (
     CheckpointManager,
     build_optimizer,

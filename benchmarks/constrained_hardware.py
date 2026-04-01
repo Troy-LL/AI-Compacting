@@ -23,15 +23,15 @@ import os
 import sys
 from dataclasses import dataclass
 from pathlib import Path
-from typing import List
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 import torch
 
 from models.hailp_model import HAILPConfig, HAILPModel
+from training.device import DEVICE as DEFAULT_DEVICE
+from training.device import DEVICE_NAME
 from training.trainer import ram_mb
-from training.device import DEVICE as DEFAULT_DEVICE, DEVICE_NAME
 
 
 @dataclass
@@ -78,7 +78,7 @@ def benchmark_under_memory_constraint(
     ram_limit_mb: float,
     device: torch.device | None = None,
     batch_size: int = 1,
-) -> List[ConstrainedResult]:
+) -> list[ConstrainedResult]:
     """Soft benchmark under a RAM budget.
 
     This does *not* hard-enforce the limit (portable enforcement is

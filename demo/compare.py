@@ -24,8 +24,9 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 import torch
 
 from models.hailp_model import HAILPConfig, HAILPModel
+from training.device import DEVICE as DEFAULT_DEVICE
+from training.device import DEVICE_NAME
 from training.trainer import ram_at_seq
-from training.device import DEVICE as DEFAULT_DEVICE, DEVICE_NAME
 
 
 def _human_mb(params: int) -> float:

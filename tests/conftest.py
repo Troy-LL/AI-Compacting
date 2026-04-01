@@ -8,7 +8,6 @@ import torch
 from models.baseline_gpt import BaselineConfig, BaselineGPT
 from models.hailp_model import HAILPConfig, HAILPModel
 
-
 # ── Configs ────────────────────────────────────────────────────────────────────
 
 @pytest.fixture(scope="session")

@@ -12,25 +12,23 @@ This will:
 
 from __future__ import annotations
 
+import argparse
 import base64
 import io
-import argparse
 import sys
 from pathlib import Path
-from typing import List
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 import matplotlib.pyplot as plt
-import torch
-
-from training.device import DEVICE as DEFAULT_DEVICE, DEVICE_NAME
 
 from benchmarks.memory_profile import benchmark_memory_vs_sequence_length
-from benchmarks.speed_profile import benchmark_speed_vs_sequence_length
 from benchmarks.quality_eval import benchmark_quality
+from benchmarks.speed_profile import benchmark_speed_vs_sequence_length
 from models.baseline_gpt import BaselineConfig, BaselineGPT
 from models.hailp_model import HAILPConfig, HAILPModel
+from training.device import DEVICE as DEFAULT_DEVICE
+from training.device import DEVICE_NAME
 
 
 def _fig_to_base64(fig) -> str:
@@ -59,26 +57,30 @@ def generate_report_html(mem_img: str, speed_img: str, quality_img: str) -> str:
 <body>
   <h1>H(AI)LP Architecture Report</h1>
   <div class="summary">
-    <p>This report evaluates the H(AI)LP RWKV model (12-layer recurrent, fixed state) on memory usage,
-    speed, and quality metrics. Optional Baseline GPT comparisons can be enabled with `--baseline`.</p>
+    <p>This report evaluates the H(AI)LP RWKV model (12-layer recurrent, fixed state)
+    on memory usage, speed, and quality metrics. Optional Baseline GPT comparisons
+    can be enabled with `--baseline`.</p>
   </div>
 
   <div class="chart">
     <h2>Memory vs Sequence Length</h2>
-    <p>Baseline GPT RAM rises sharply with context length; H(AI)LP stays nearly flat thanks to a fixed-size recurrent state.</p>
+    <p>Baseline GPT RAM rises sharply with context length; H(AI)LP stays nearly flat
+    thanks to a fixed-size recurrent state.</p>
     <img src="data:image/png;base64,{mem_img}" alt="Memory vs sequence length" />
   </div>
 
   <div class="chart">
     <h2>Speed vs Sequence Length (tokens/sec)</h2>
-    <p>Forward speed for both models at different sequence lengths on this machine. At short contexts the transformer is fast;
-    at long contexts H(AI)LP's O(n) time-mixing scales better.</p>
+    <p>Forward speed for both models at different sequence lengths on this machine.
+    At short contexts the transformer is fast; at long contexts H(AI)LP's O(n)
+    time-mixing scales better.</p>
     <img src="data:image/png;base64,{speed_img}" alt="Speed vs sequence length" />
   </div>
 
   <div class="chart">
     <h2>Quality (Validation Perplexity)</h2>
-    <p>Validation perplexity for each model on a small Simple English Wikipedia slice (random-init or trained, depending on checkpoints).</p>
+    <p>Validation perplexity for each model on a small Simple English Wikipedia slice
+    (random-init or trained, depending on checkpoints).</p>
     <img src="data:image/png;base64,{quality_img}" alt="Quality comparison" />
   </div>
 
@@ -128,7 +130,7 @@ def main() -> None:
     hailp = HAILPModel(h_cfg)
 
     # Memory: use helper from memory_profile
-    seq_lens: List[int] = [64, 128, 256, 512, 1024]
+    seq_lens: list[int] = [64, 128, 256, 512, 1024]
     mem_hailp = benchmark_memory_vs_sequence_length(
         hailp,
         "H(AI)LP RWKV",

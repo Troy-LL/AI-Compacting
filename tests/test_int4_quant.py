@@ -4,15 +4,13 @@ from __future__ import annotations
 
 import torch
 
-from pathlib import Path
-
 from benchmarks.quantize_int4 import (
+    load_hailp_int4,
     pack_int4_tight,
-    unpack_int4_tight,
-    should_quantize_int4,
     pack_model,
     save_hailp_int4,
-    load_hailp_int4,
+    should_quantize_int4,
+    unpack_int4_tight,
 )
 from models.hailp_model import HAILPConfig, HAILPModel
 

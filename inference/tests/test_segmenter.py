@@ -2,10 +2,7 @@
 
 from __future__ import annotations
 
-import pytest
-
 from inference import segmenter
-
 
 FIRST_AID_GUIDE = """First paragraph about water purification.
 
@@ -198,8 +195,8 @@ def test_full_document_segmentation() -> None:
 
 def test_no_infinite_loop() -> None:
     """Validation gate: segmentation terminates promptly."""
-    import time
     import signal
+    import time
 
     def run_segment() -> list[dict[str, object]]:
         return segmenter.segment(ADVERSARIAL_DOCUMENT)

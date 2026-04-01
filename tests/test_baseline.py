@@ -8,11 +8,10 @@ Validation gates:
 
 from __future__ import annotations
 
-import torch
 import pytest
+import torch
 
-from models.baseline_gpt import BaselineConfig, BaselineGPT
-
+from models.baseline_gpt import BaselineGPT
 
 # ── Forward pass ──────────────────────────────────────────────────────────────
 

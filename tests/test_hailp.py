@@ -11,10 +11,8 @@ Validation gates:
 from __future__ import annotations
 
 import torch
-import pytest
 
-from models.hailp_model import HAILPConfig, HAILPModel
-
+from models.hailp_model import HAILPModel
 
 # ── Forward pass ──────────────────────────────────────────────────────────────
 

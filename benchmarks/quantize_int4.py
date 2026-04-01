@@ -21,8 +21,8 @@ from __future__ import annotations
 
 import argparse
 import os
+from collections.abc import Mapping
 from pathlib import Path
-from typing import Dict, Tuple, Mapping
 
 import numpy as np
 import torch
@@ -30,7 +30,7 @@ import torch
 
 def pack_int4_tight(
     tensor: torch.Tensor,
-) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
     """Pack a float tensor into 4‑bit values with tight nibble packing.
 
     Uses per‑tensor affine quantisation:
@@ -82,7 +82,7 @@ def unpack_int4_tight(
     packed: torch.Tensor,
     scale: torch.Tensor,
     zp: torch.Tensor,
-    shape: torch.Size | Tuple[int, ...],
+    shape: torch.Size | tuple[int, ...],
 ) -> torch.Tensor:
     """Reconstruct an approximate float tensor from packed INT4."""
     if packed.numel() == 0:
@@ -107,7 +107,7 @@ def unpack_int4_tight(
     return x_hat.view(*shape)
 
 
-def _quantize_tensor_int4(x: torch.Tensor) -> Dict[str, torch.Tensor]:
+def _quantize_tensor_int4(x: torch.Tensor) -> dict[str, torch.Tensor]:
     """Quantise a tensor using pack_int4_tight; return storage dict."""
     packed, scale, zp = pack_int4_tight(x)
     return {
@@ -138,7 +138,7 @@ def should_quantize_int4(name: str, tensor: torch.Tensor) -> bool:
 
 def pack_model(
     state_dict: Mapping[str, torch.Tensor],
-) -> Tuple[Dict[str, Dict[str, torch.Tensor]], Dict[str, torch.Tensor]]:
+) -> tuple[dict[str, dict[str, torch.Tensor]], dict[str, torch.Tensor]]:
     """Split a model state_dict into INT4‑quantised and kept‑FP16 buckets.
 
     Returns
@@ -149,8 +149,8 @@ def pack_model(
         Mapping from param name -> original tensor for parameters that stayed
         in higher precision (biases, norms, small tensors).
     """
-    quantised: Dict[str, Dict[str, torch.Tensor]] = {}
-    kept_fp16: Dict[str, torch.Tensor] = {}
+    quantised: dict[str, dict[str, torch.Tensor]] = {}
+    kept_fp16: dict[str, torch.Tensor] = {}
 
     for name, tensor in state_dict.items():
         if not isinstance(tensor, torch.Tensor):
@@ -174,10 +174,10 @@ def quantize_checkpoint_int4(
 ) -> None:
     """Quantise FP32 model weights from a HAILP checkpoint to 4‑bit storage."""
     ckpt = torch.load(ckpt_path, map_location="cpu", weights_only=False)
-    model_state: Dict[str, torch.Tensor] = ckpt.get("model", {})
+    model_state: dict[str, torch.Tensor] = ckpt.get("model", {})
 
     # Filter tiny tensors up front.
-    filtered_state: Dict[str, torch.Tensor] = {}
+    filtered_state: dict[str, torch.Tensor] = {}
     for name, tensor in model_state.items():
         if not isinstance(tensor, torch.Tensor):
             continue
@@ -233,7 +233,7 @@ def save_hailp_int4(model: torch.nn.Module, prefix: str | Path) -> Path:
     state = model.state_dict()
     quantised, kept_fp16 = pack_model(state)
 
-    arrays: Dict[str, np.ndarray] = {}
+    arrays: dict[str, np.ndarray] = {}
 
     # INT4 tensors
     for name, qdict in quantised.items():
@@ -264,7 +264,7 @@ def load_hailp_int4(prefix: str | Path, model: torch.nn.Module) -> None:
         path = path.with_suffix(".npz")
 
     with np.load(path, allow_pickle=False) as data:
-        state: Dict[str, torch.Tensor] = {}
+        state: dict[str, torch.Tensor] = {}
 
         # First, restore INT4 tensors
         for key in data.files:

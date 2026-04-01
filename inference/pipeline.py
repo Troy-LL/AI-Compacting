@@ -18,56 +18,7 @@ from typing import Any
 from . import segmenter
 from .fast_responder import compute_response, lookup_response
 from .telemetry import Telemetry
-
-
-def _estimate_tokens(text: str) -> int:
-    """Estimate tokens using the segmenter's heuristic."""
-
-    # Reuse the same heuristic so Phase 2/4 budgets and telemetry stay consistent.
-    return int(segmenter._estimate_token_count(text))  # type: ignore[attr-defined]
-
-
-def _call_model(model: Any, prompt: str, tokenizer: Any | None, sampler: Any | None) -> str:
-    """Best-effort model adapter for dummy models and real integrations."""
-
-    if not prompt:
-        return ""
-
-    if model is None:
-        return f"(model_inference) {prompt}"
-
-    if hasattr(model, "generate_text") and callable(getattr(model, "generate_text")):
-        return str(model.generate_text(prompt))
-
-    if hasattr(model, "respond") and callable(getattr(model, "respond")):
-        return str(model.respond(prompt))
-
-    if callable(model):
-        try:
-            return str(model(prompt))
-        except TypeError:
-            pass
-
-    if hasattr(model, "generate") and callable(getattr(model, "generate")):
-        generate = model.generate
-        for kwargs in (
-            {"tokenizer": tokenizer, "sampler": sampler},
-            {"tokenizer": tokenizer},
-            {},
-        ):
-            try:
-                return str(generate(prompt, **kwargs))
-            except TypeError:
-                continue
-
-    return f"(model_inference) {prompt}"
-
-
-def _hash_document(document: str) -> str:
-    """Create a stable cache key for a document."""
-
-    b = document.encode("utf-8", errors="ignore")
-    return hashlib.sha256(b).hexdigest()
+from .utils import call_model, estimate_tokens, hash_document
 
 
 @dataclass(frozen=True)
@@ -104,7 +55,7 @@ class HailpInferencePipeline:
     def _segment_context(self, context_document: str) -> list[dict[str, object]]:
         """Segment context with a small in-memory cache."""
 
-        key = _hash_document(context_document)
+        key = hash_document(context_document)
         cached = self._segment_cache.get(key)
         if cached is not None:
             return cached
@@ -188,10 +139,10 @@ class HailpInferencePipeline:
                     f"Context:\n{context_text}\n\n"
                     "Answer based on the context. If unsure, say so briefly."
                 )
-                response = _call_model(
+                response = call_model(
                     self._model, prompt, tokenizer=self._tokenizer, sampler=self._sampler
                 )
-                tokens_used = _estimate_tokens(prompt)
+                tokens_used = estimate_tokens(prompt)
                 latency_ms = (time.perf_counter() - t0) * 1000.0
                 self._logger.info(
                     "pipeline path=segmented_inference tokens_used=%s",
@@ -204,10 +155,10 @@ class HailpInferencePipeline:
                 }
 
             # No context: direct model inference tier.
-            response = _call_model(
+            response = call_model(
                 self._model, query.strip(), tokenizer=self._tokenizer, sampler=self._sampler
             )
-            tokens_used = _estimate_tokens(query.strip())
+            tokens_used = estimate_tokens(query.strip())
             latency_ms = (time.perf_counter() - t0) * 1000.0
             self._logger.info("pipeline path=model_inference tokens_used=%s", tokens_used)
             return response, {

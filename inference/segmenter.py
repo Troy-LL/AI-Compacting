@@ -13,8 +13,11 @@ Goals:
 from __future__ import annotations
 
 import re
+from collections.abc import Iterable
 from dataclasses import dataclass
-from typing import Any, Iterable
+from typing import Any
+
+from .utils import call_model, estimate_tokens
 
 # A conservative token budget for a "window" in Phase 2.
 # This is an estimation (not model tokenizer tokens) and is only used to
@@ -38,13 +41,6 @@ _TOKENS_RE = re.compile(
 def _normalize_paragraph_text(text: str) -> str:
     # Collapse inconsistent whitespace (spaces/tabs/newlines) inside a paragraph.
     return _MULTISPACE_RE.sub(" ", text).strip()
-
-
-def _estimate_token_count(text: str) -> int:
-    """Estimate token count using a fast heuristic (no model tokenizer)."""
-    if not text:
-        return 0
-    return len(_TOKENS_RE.findall(text))
 
 
 def _tokenize(text: str) -> list[str]:
@@ -178,7 +174,7 @@ def build_windows(paragraphs: list[dict[str, str]]) -> list[dict[str, object]]:
         current_tokens = 0
 
     for p in parsed:
-        p_tokens = _estimate_token_count(p.text)
+        p_tokens = estimate_tokens(p.text)
 
         if p_tokens <= max_window_tokens:
             # If paragraph fits, pack greedily; otherwise start new window.
@@ -196,13 +192,13 @@ def build_windows(paragraphs: list[dict[str, str]]) -> list[dict[str, object]]:
 
         for chunk_idx, chunk_tokens in enumerate(chunks):
             chunk_text = _join_tokens(chunk_tokens)
-            chunk_token_count = _estimate_token_count(chunk_text)
+            chunk_token_count = estimate_tokens(chunk_text)
 
             # Safety: in case join/token estimate disagree, enforce the budget.
             if chunk_token_count > max_window_tokens:
                 # Fallback: hard-trim by tokens.
                 chunk_text = _join_tokens(chunk_tokens[:max_window_tokens])
-                chunk_token_count = _estimate_token_count(chunk_text)
+                chunk_token_count = estimate_tokens(chunk_text)
 
             if current_tokens + chunk_token_count > max_window_tokens:
                 flush_window()
@@ -360,22 +356,14 @@ def find_boundary_with_cost(
     if model is None:
         # Represent the fallback as a short response so token-cost stays low.
         boundary_resp = midpoint if midpoint else "none"
-        return midpoint, {"tokens_used": _estimate_token_count(boundary_resp)}
+        return midpoint, {"tokens_used": estimate_tokens(boundary_resp)}
 
     # Best-effort model inference hook.
-    if hasattr(model, "generate_text") and callable(getattr(model, "generate_text")):
-        boundary_resp = str(model.generate_text(prompt))
-    elif hasattr(model, "respond") and callable(getattr(model, "respond")):
-        boundary_resp = str(model.respond(prompt))
-    elif callable(model):
-        boundary_resp = str(model(prompt))
-    else:
-        # Unknown adapter: fallback.
-        boundary_resp = midpoint if midpoint else "none"
+    boundary_resp = call_model(model, prompt, tokenizer=tokenizer, sampler=sampler)
 
     parsed = _parse_boundary_response(boundary_resp, window.get("paragraphs", []))  # type: ignore[arg-type]
     boundary_id = parsed if parsed is not None else midpoint
-    return boundary_id, {"tokens_used": _estimate_token_count(boundary_resp)}
+    return boundary_id, {"tokens_used": estimate_tokens(boundary_resp)}
 
 
 def find_boundary(
@@ -408,7 +396,7 @@ def _split_paragraphs_into_atomic_chunks(
         if not text:
             continue
 
-        p_tokens = _estimate_token_count(text)
+        p_tokens = estimate_tokens(text)
         if p_tokens <= max_window_tokens:
             chunks.append({"id": pid, "text": text, "token_count": p_tokens})
             continue
@@ -417,10 +405,10 @@ def _split_paragraphs_into_atomic_chunks(
         token_chunks = _chunk_tokens(tokens, max_window_tokens)
         for chunk_idx, chunk_tokens in enumerate(token_chunks):
             chunk_text = _join_tokens(chunk_tokens)
-            chunk_token_count = _estimate_token_count(chunk_text)
+            chunk_token_count = estimate_tokens(chunk_text)
             if chunk_token_count > max_window_tokens:
-                chunk_text = _join_tokens(chunk_tokens[:max_window_tokens])
-                chunk_token_count = _estimate_token_count(chunk_text)
+                chunk_text = _join_tokens(token_chunks[chunk_idx][:max_window_tokens])
+                chunk_token_count = estimate_tokens(chunk_text)
             chunks.append(
                 {
                     "id": pid,
@@ -551,7 +539,7 @@ def segment(
             # This shouldn't happen if window construction is correct, but
             # enforce deterministically.
             seg_text = seg_text[:1]
-            seg_token_count = _estimate_token_count(seg_text)
+            seg_token_count = estimate_tokens(seg_text)
 
         segments.append(
             {

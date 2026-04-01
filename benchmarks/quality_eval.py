@@ -25,8 +25,8 @@ import torch
 from models.baseline_gpt import BaselineConfig, BaselineGPT
 from models.hailp_model import HAILPConfig, HAILPModel
 from training.data import get_dataloaders
-from training.trainer import evaluate
 from training.device import DEVICE as DEFAULT_DEVICE
+from training.trainer import evaluate
 
 # Match train.py model config (vocab_size for GPT-2 tokeniser)
 VOCAB_SIZE = 50_257

@@ -3,11 +3,9 @@
 
 import argparse
 import math
-import os
 import time
 from pathlib import Path
 
-import torch
 from accelerate import Accelerator
 
 from models.hailp_model import HAILPConfig, HAILPModel
@@ -17,8 +15,8 @@ from training.trainer import (
     WarmupCosineScheduler,
     build_optimizer,
     compute_loss,
+    evaluate,
     ram_mb,
-    evaluate
 )
 
 try:
@@ -169,7 +167,11 @@ def main():
             current_lr = optimizer.param_groups[0]["lr"]
             current_ram = ram_mb()
 
-            print(f"step {step:6,}/{config['total_steps']:,} | loss {avg_loss:.4f} | ppl {ppl:7.2f} | lr {current_lr:.2e} | {tps:,.0f} tok/s | {current_ram:.0f} MB")
+            print(
+                f"step {step:6,}/{config['total_steps']:,} | "
+                f"loss {avg_loss:.4f} | ppl {ppl:7.2f} | "
+                f"lr {current_lr:.2e} | {tps:,.0f} tok/s | {current_ram:.0f} MB"
+            )
 
             if use_wandb and _HAS_WANDB:
                 wandb.log({
@@ -183,18 +185,26 @@ def main():
             t0 = time.perf_counter()
 
         # Checkpoint / Eval
-        if (step % config["checkpoint_every"] == 0 or step == config["total_steps"]) and accelerator.is_main_process:
-            # We explicitly unwrap the model to evaluate and save so that weights correspond perfectly to original names!
+        is_checkpoint_step = (step % config["checkpoint_every"] == 0 or step == config["total_steps"])
+        if is_checkpoint_step and accelerator.is_main_process:
+            # We explicitly unwrap the model to evaluate and save so that weights correspond
+            # perfectly to original names!
             unwrapped_model = accelerator.unwrap_model(model)
             val_metrics = evaluate(unwrapped_model, val_loader, device, is_recurrent=True)
             val_loss = val_metrics["loss"]
             
-            print(f"\n  [val] step={step:,}  loss={val_loss:.4f}  ppl={val_metrics['perplexity']:.1f}\n")
+            print(
+                f"\n  [val] step={step:,}  loss={val_loss:.4f}  "
+                f"ppl={val_metrics['perplexity']:.1f}\n"
+            )
             
             ckpt_mgr.save(step, unwrapped_model, optimizer, val_loss, config, scaler=None)
             
             if use_wandb and _HAS_WANDB:
-                wandb.log({"hailp/val_loss": val_loss, "hailp/val_perplexity": val_metrics["perplexity"]}, step=step)
+                wandb.log(
+                    {"hailp/val_loss": val_loss, "hailp/val_perplexity": val_metrics["perplexity"]},
+                    step=step,
+                )
 
     if use_wandb and _HAS_WANDB and getattr(accelerator, "is_main_process", True):
         wandb.finish()

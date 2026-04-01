@@ -24,7 +24,6 @@ from __future__ import annotations
 import math
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Optional
 
 import torch
 import torch.nn as nn
@@ -45,7 +44,7 @@ class BaselineConfig:
     dropout: float = 0.1
 
     @classmethod
-    def from_yaml(cls, path: str | Path) -> "BaselineConfig":
+    def from_yaml(cls, path: str | Path) -> BaselineConfig:
         """Load configuration from a YAML file."""
         with open(path) as f:
             cfg = yaml.safe_load(f)
@@ -94,7 +93,7 @@ class CausalSelfAttention(nn.Module):
         self.register_buffer("mask", mask.view(1, 1, config.context_window, config.context_window))
 
         # KV cache (None until first forward, then grows with sequence)
-        self._kv_cache: Optional[tuple[torch.Tensor, torch.Tensor]] = None
+        self._kv_cache: tuple[torch.Tensor, torch.Tensor] | None = None
 
     def clear_cache(self) -> None:
         """Reset the KV cache (call between independent sequences)."""
@@ -125,42 +124,42 @@ class CausalSelfAttention(nn.Module):
         -------
         Tensor, shape (B, T, hidden_dim)
         """
-        B, T, C = x.shape
+        b, t, c = x.shape
 
         # Project to Q, K, V
         qkv = self.qkv(x)
         q, k, v = qkv.chunk(3, dim=-1)
 
-        # Reshape to multi-head: (B, H, T, head_dim)
-        def reshape(t: torch.Tensor) -> torch.Tensor:
-            return t.view(B, T, self.num_heads, self.head_dim).transpose(1, 2)
+        # Reshape to multi-head: (b, H, t, head_dim)
+        def reshape(t_in: torch.Tensor) -> torch.Tensor:
+            return t_in.view(b, t, self.num_heads, self.head_dim).transpose(1, 2)
 
         q, k, v = reshape(q), reshape(k), reshape(v)
 
         # KV cache: concatenate past and present
         if use_cache and self._kv_cache is not None:
             past_k, past_v = self._kv_cache
-            k = torch.cat([past_k, k], dim=2)  # (B, H, T_total, head_dim)
+            k = torch.cat([past_k, k], dim=2)  # (b, H, t_total, head_dim)
             v = torch.cat([past_v, v], dim=2)
 
         if use_cache:
             self._kv_cache = (k.detach(), v.detach())
 
-        T_total = k.shape[2]
+        t_total = k.shape[2]
 
         # Scaled dot-product attention with causal mask
         scale = math.sqrt(self.head_dim)
-        attn = (q @ k.transpose(-2, -1)) / scale         # (B, H, T, T_total)
+        attn = (q @ k.transpose(-2, -1)) / scale         # (b, H, t, t_total)
 
         # Apply causal mask
-        causal_mask = self.mask[:, :, :T, :T_total]
+        causal_mask = self.mask[:, :, :t, :t_total]
         attn = attn.masked_fill(causal_mask == 0, float("-inf"))
         attn = F.softmax(attn, dim=-1)
         attn = self.dropout(attn)
 
         # Aggregate values
-        out = attn @ v                                     # (B, H, T, head_dim)
-        out = out.transpose(1, 2).contiguous().view(B, T, C)
+        out = attn @ v                                     # (b, H, t, head_dim)
+        out = out.transpose(1, 2).contiguous().view(b, t, c)
         return self.out_proj(out)
 
 
@@ -268,14 +267,14 @@ class BaselineGPT(nn.Module):
         -------
         logits : Tensor, shape (B, T, vocab_size)
         """
-        B, T = input_ids.shape
-        assert T <= self.config.context_window, (
-            f"Sequence length {T} exceeds context_window {self.config.context_window}"
+        b, t = input_ids.shape
+        assert t <= self.config.context_window, (
+            f"Sequence length {t} exceeds context_window {self.config.context_window}"
         )
 
-        tok_emb = self.embed(input_ids)                     # (B, T, hidden_dim)
-        pos = torch.arange(T, device=input_ids.device)
-        pos_emb = self.pos_embed(pos)                       # (T, hidden_dim)
+        tok_emb = self.embed(input_ids)                     # (b, t, hidden_dim)
+        pos = torch.arange(t, device=input_ids.device)
+        pos_emb = self.pos_embed(pos)                       # (t, hidden_dim)
         x = self.embed_drop(tok_emb + pos_emb)
 
         for block in self.blocks:
@@ -286,6 +285,6 @@ class BaselineGPT(nn.Module):
         return logits
 
     @classmethod
-    def from_config_file(cls, path: str | Path) -> "BaselineGPT":
+    def from_config_file(cls, path: str | Path) -> BaselineGPT:
         """Construct a BaselineGPT from a YAML config file."""
         return cls(BaselineConfig.from_yaml(path))

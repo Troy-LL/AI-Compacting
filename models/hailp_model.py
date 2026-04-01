@@ -33,7 +33,6 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Optional
 
 import torch
 import torch.nn as nn
@@ -58,7 +57,7 @@ class HAILPConfig:
     dropout: float = 0.1
 
     @classmethod
-    def from_yaml(cls, path: str | Path) -> "HAILPConfig":
+    def from_yaml(cls, path: str | Path) -> HAILPConfig:
         """Load configuration from a YAML file."""
         with open(path) as f:
             cfg = yaml.safe_load(f)
@@ -131,7 +130,7 @@ class RWKVTimeMixing(nn.Module):
     def forward(
         self,
         x: torch.Tensor,
-        h_state: Optional[torch.Tensor] = None,
+        h_state: torch.Tensor | None = None,
     ) -> tuple[torch.Tensor, torch.Tensor]:
         """Process a sequence with optional recurrent state.
 
@@ -149,11 +148,11 @@ class RWKVTimeMixing(nn.Module):
         h_state : Tensor, shape (B, hidden_dim)
             Updated recurrent state for the next call.
         """
-        B, T, C = x.shape
+        b, t, c = x.shape
 
         # Initialise state if needed
         if h_state is None:
-            h_state = torch.zeros(B, C, device=x.device, dtype=x.dtype)
+            h_state = torch.zeros(b, c, device=x.device, dtype=x.dtype)
 
         x = self.ln(x)
 
@@ -161,30 +160,30 @@ class RWKVTimeMixing(nn.Module):
         # Equivalent to shifting sequence dim by 1 and inserting zeros at t=0.
         x_shifted = torch.cat(
             [
-                torch.zeros(B, 1, C, device=x.device, dtype=x.dtype),
+                torch.zeros(b, 1, c, device=x.device, dtype=x.dtype),
                 x[:, :-1, :],
             ],
             dim=1,
-        )  # (B, T, C)
+        )  # (b, t, c)
         mix = 0.5 * x + 0.5 * x_shifted          # simple lerp (RWKV uses learned mix)
 
-        q = self.w_q(mix)                         # (B, T, C)
-        k = self.w_k(mix)                         # (B, T, C)
-        v = self.w_v(mix)                         # (B, T, C)
+        q = self.w_q(mix)                         # (b, t, c)
+        k = self.w_k(mix)                         # (b, t, c)
+        v = self.w_v(mix)                         # (b, t, c)
 
         # Decay coefficient: exp(-exp(time_decay)) ∈ (0, 1)
-        decay = torch.exp(-torch.exp(self.time_decay))  # (C,)
+        decay = torch.exp(-torch.exp(self.time_decay))  # (c,)
 
         # Recurrent WKV over the sequence dimension
         outputs = []
-        for t in range(T):
+        for _t in range(t):
             # Update state: exponential moving average
-            h_state = decay * h_state + k[:, t, :] * v[:, t, :]  # (B, C)
+            h_state = decay * h_state + k[:, _t, :] * v[:, _t, :]  # (b, c)
             # Query the state
-            y = F.sigmoid(q[:, t, :]) * h_state                  # (B, C)
+            y = F.sigmoid(q[:, _t, :]) * h_state                  # (b, c)
             outputs.append(y.unsqueeze(1))
 
-        out = torch.cat(outputs, dim=1)           # (B, T, C)
+        out = torch.cat(outputs, dim=1)           # (b, t, c)
         out = self.dropout(self.out_proj(out))
 
         return out, h_state.detach()
@@ -202,7 +201,7 @@ class HAILPBlock(nn.Module):
     def __init__(
         self,
         config: HAILPConfig,
-        shared_ffn: "SharedFFNPool",
+        shared_ffn: SharedFFNPool,
         layer_idx: int,
     ) -> None:
         super().__init__()
@@ -229,7 +228,7 @@ class HAILPBlock(nn.Module):
     def forward(
         self,
         x: torch.Tensor,
-        h_state: Optional[torch.Tensor] = None,
+        h_state: torch.Tensor | None = None,
     ) -> tuple[torch.Tensor, torch.Tensor]:
         """Forward pass through this block.
 
@@ -331,7 +330,7 @@ class HAILPModel(nn.Module):
     def forward(
         self,
         input_ids: torch.Tensor,
-        h_states: Optional[list[torch.Tensor]] = None,
+        h_states: list[torch.Tensor] | None = None,
     ) -> tuple[torch.Tensor, list[torch.Tensor]]:
         """Forward pass.
 
@@ -350,9 +349,9 @@ class HAILPModel(nn.Module):
         h_states : list[Tensor]
             Updated recurrent states for next call. Same fixed shapes.
         """
-        B, T = input_ids.shape
+        b, t = input_ids.shape
 
-        tok_emb = self.embed(input_ids)    # (B, T, hidden_dim)
+        tok_emb = self.embed(input_ids)    # (b, t, hidden_dim)
         x = self.embed_drop(tok_emb)
 
         # Initialise states if not provided
@@ -370,7 +369,7 @@ class HAILPModel(nn.Module):
         return logits, new_h_states
 
     @classmethod
-    def from_config_file(cls, path: str | Path) -> "HAILPModel":
+    def from_config_file(cls, path: str | Path) -> HAILPModel:
         """Construct an H(AI)LP model from a YAML config file."""
         return cls(HAILPConfig.from_yaml(path))
 

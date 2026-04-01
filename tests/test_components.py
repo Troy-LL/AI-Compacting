@@ -14,8 +14,7 @@ import torch.nn as nn
 
 from models.components.adapter import LanguageAdapter
 from models.components.low_rank import LowRankLinear
-from models.components.param_sharing import SharedFFN, SharedFFNPool
-
+from models.components.param_sharing import SharedFFNPool
 
 # ── LowRankLinear ─────────────────────────────────────────────────────────────
 

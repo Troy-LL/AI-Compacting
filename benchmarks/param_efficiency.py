@@ -17,12 +17,12 @@ from __future__ import annotations
 import sys
 from dataclasses import dataclass
 from pathlib import Path
-from typing import List
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from models.hailp_model import HAILPConfig, HAILPModel
 import argparse
+
+from models.hailp_model import HAILPConfig, HAILPModel
 
 
 @dataclass
@@ -92,7 +92,7 @@ def benchmark_param_efficiency(
     )
 
 
-def _print_table(rows: List[ParamRow]) -> None:
+def _print_table(rows: list[ParamRow]) -> None:
     header = (
         f"{'model':<15} | {'total_params':>13} | {'size_mb(fp32)':>13} | "
         f"{'params_per_mb':>13}"

@@ -14,58 +14,7 @@ import logging
 from typing import Any
 
 from .fast_responder import RoutingMeta, RoutingResult, compute_response, lookup_response
-
-
-def _model_inference(
-    query: str,
-    model: Any | None,
-    tokenizer: Any | None,
-    sampler: Any | None,
-) -> str:
-    """Best-effort model inference hook.
-
-    The project will eventually integrate the router with the real model +
-    tokenizer/sampler objects. For Phase 1 we keep this logic generic so tests
-    can inject lightweight dummy objects.
-    """
-
-    prompt = query.strip()
-    if not prompt:
-        return ""
-
-    if model is None:
-        # Phase 1 fallback: still returns non-empty text.
-        return f"(model_inference) {prompt}"
-
-    # Common patterns for model adapters.
-    if hasattr(model, "generate_text") and callable(getattr(model, "generate_text")):
-        return str(model.generate_text(prompt))
-
-    if hasattr(model, "respond") and callable(getattr(model, "respond")):
-        return str(model.respond(prompt))
-
-    if callable(model):
-        try:
-            return str(model(prompt))
-        except TypeError:
-            # Some callables require extra args; fall through to "generate".
-            pass
-
-    if hasattr(model, "generate") and callable(getattr(model, "generate")):
-        generate = model.generate
-        # Try a few argument styles, progressively decreasing assumptions.
-        for kwargs in (
-            {"tokenizer": tokenizer, "sampler": sampler},
-            {"tokenizer": tokenizer},
-            {},
-        ):
-            try:
-                return str(generate(prompt, **kwargs))
-            except TypeError:
-                continue
-
-    # If we couldn't adapt the model interface, return a deterministic string.
-    return f"(model_inference) {prompt}"
+from .utils import call_model
 
 
 def route_query(
@@ -105,7 +54,7 @@ def route_query(
         return response, meta
 
     meta: RoutingMeta = {"path": "model_inference", "matched": "default"}
-    response = _model_inference(query, model=model, tokenizer=tokenizer, sampler=sampler)
+    response = call_model(model, query.strip(), tokenizer=tokenizer, sampler=sampler)
     logger.info("route_query path=%s matched=%s", meta["path"], meta["matched"])
     return response, meta
 

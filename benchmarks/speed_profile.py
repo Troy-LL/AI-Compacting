@@ -23,7 +23,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 import torch
 
 from models.hailp_model import HAILPConfig, HAILPModel
-from training.device import DEVICE as DEFAULT_DEVICE, DEVICE_NAME
+from training.device import DEVICE as DEFAULT_DEVICE
+from training.device import DEVICE_NAME
 
 # ── Config (match memory_benchmark / training) ───────────────────────────────────
 
@@ -205,7 +206,6 @@ def print_table(rows: list[dict]) -> None:
 
 
 def main() -> None:
-    import argparse
 
     parser = argparse.ArgumentParser(
         description="H(AI)LP speed benchmark: tokens/sec",

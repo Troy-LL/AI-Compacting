@@ -21,9 +21,8 @@ reuse from notebooks or other scripts.
 from __future__ import annotations
 
 import sys
+from collections.abc import Iterable
 from dataclasses import dataclass
-from typing import Iterable, List
-
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
@@ -31,8 +30,9 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 import torch
 
 from models.hailp_model import HAILPConfig, HAILPModel
+from training.device import DEVICE as DEFAULT_DEVICE
+from training.device import DEVICE_NAME
 from training.trainer import ram_at_seq
-from training.device import DEVICE as DEFAULT_DEVICE, DEVICE_NAME
 
 
 @dataclass
@@ -51,7 +51,7 @@ def benchmark_memory_vs_sequence_length(
     is_recurrent: bool = False,
     batch_size: int = 1,
     vocab_size: int = 8_000,
-) -> List[MemoryPoint]:
+) -> list[MemoryPoint]:
     """Measure peak RAM delta (MB) for a model across sequence lengths.
 
     Parameters
@@ -98,7 +98,7 @@ def benchmark_memory_vs_sequence_length(
     return results
 
 
-def _print_table(points: List[MemoryPoint]) -> None:
+def _print_table(points: list[MemoryPoint]) -> None:
     """Pretty print a dual-model table grouped by seq_len."""
     # Group by seq_len, preserving order
     by_seq: dict[int, list[MemoryPoint]] = {}

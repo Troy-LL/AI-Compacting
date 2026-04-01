@@ -38,16 +38,16 @@ H(AI)LP: Demonstrating Fixed-Memory LLM Architecture
 
 from __future__ import annotations
 
-import sys
-import os
 import argparse
+import os
+import sys
+
 sys.path.insert(0, os.path.dirname(__file__))
 
 import torch
 
 from models.baseline_gpt import BaselineConfig, BaselineGPT
 from models.hailp_model import HAILPConfig, HAILPModel
-
 
 # ── Config ─────────────────────────────────────────────────────────────────────
 # Use full configs so parameter counts are meaningful

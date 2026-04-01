@@ -22,8 +22,8 @@ from __future__ import annotations
 import math
 import os
 import time
+from collections.abc import Iterator
 from pathlib import Path
-from typing import Iterator, Optional
 
 import torch
 import torch.nn as nn
@@ -61,10 +61,10 @@ def compute_loss(
     logits  : Tensor of shape (B, T, vocab_size)
     targets : Tensor of shape (B, T) -- use -100 for padding positions
     """
-    B, T, V = logits.shape
+    b, t, v = logits.shape
     return nn.functional.cross_entropy(
-        logits.reshape(B * T, V),
-        targets.reshape(B * T),
+        logits.reshape(b * t, v),
+        targets.reshape(b * t),
         ignore_index=ignore_index,
     )
 
@@ -131,7 +131,7 @@ class WarmupCosineScheduler:
     def step(self, step: int) -> None:
         """Apply the LR for the given global step to all param groups."""
         mult = self.get_multiplier(step)
-        for group, base_lr in zip(self.optimizer.param_groups, self._base_lrs):
+        for group, base_lr in zip(self.optimizer.param_groups, self._base_lrs, strict=True):
             group["lr"] = base_lr * mult
 
 
@@ -176,7 +176,7 @@ class CheckpointManager:
         optimizer: Optimizer,
         val_loss: float,
         config: dict,
-        scaler: Optional[GradScaler] = None,
+        scaler: GradScaler | None = None,
     ) -> None:
         """Save a checkpoint and rotate old ones."""
         ckpt = {
@@ -208,7 +208,7 @@ class CheckpointManager:
             f"path={path.name}"
         )
 
-    def latest(self) -> Optional[Path]:
+    def latest(self) -> Path | None:
         """Return the path of the newest checkpoint file, or None."""
         candidates = sorted(self.run_dir.glob("ckpt_*.pt"))
         return candidates[-1] if candidates else None
@@ -217,11 +217,13 @@ class CheckpointManager:
         self,
         path: str | Path,
         model: nn.Module,
-        optimizer: Optional[Optimizer] = None,
-        scaler: Optional[GradScaler] = None,
-        device: torch.device = torch.device("cpu"),
+        optimizer: Optimizer | None = None,
+        scaler: GradScaler | None = None,
+        device: torch.device | None = None,
     ) -> int:
         """Load a checkpoint; returns the saved step number."""
+        if device is None:
+            device = torch.device("cpu")
         ckpt = torch.load(path, map_location=device, weights_only=False)
         model.load_state_dict(ckpt["model"])
         if optimizer is not None and "optimizer" in ckpt:
@@ -257,7 +259,7 @@ def ram_at_seq(
     model: nn.Module,
     seq_len: int,
     batch_size: int = 1,
-    device: torch.device = torch.device("cpu"),
+    device: torch.device | None = None,
     is_recurrent: bool = False,
     vocab_size: int = 50_257,
 ) -> float:
@@ -266,6 +268,8 @@ def ram_at_seq(
     Snapshots RSS before and after the forward pass.  Simple but sufficient
     for comparing relative memory consumption between architectures.
     """
+    if device is None:
+        device = torch.device("cpu")
     model.eval()
     x = torch.randint(0, vocab_size, (batch_size, seq_len), device=device)
     before = ram_mb()
@@ -288,10 +292,10 @@ def train_step(
     x: torch.Tensor,
     y: torch.Tensor,
     grad_clip: float = 1.0,
-    scaler: Optional[GradScaler] = None,
+    scaler: GradScaler | None = None,
     is_recurrent: bool = False,
-    h_states=None,
-):
+    h_states: list[torch.Tensor] | None = None,
+) -> tuple[float, list[torch.Tensor] | None]:
     """One forward + backward + optimiser step.
 
     Returns
@@ -342,7 +346,7 @@ def evaluate(
     dataloader: DataLoader,
     device: torch.device,
     is_recurrent: bool = False,
-    max_batches: Optional[int] = None,
+    max_batches: int | None = None,
 ) -> dict[str, float]:
     """Evaluate on a dataloader; return loss and perplexity.
 
@@ -354,7 +358,7 @@ def evaluate(
     model.eval()
     total_loss: float = 0.0
     steps: int = 0
-    h_states = None
+    h_states: list[torch.Tensor] | None = None
 
     for i, (x, y) in enumerate(dataloader):
         if max_batches is not None and i >= max_batches:
@@ -391,7 +395,7 @@ def train_loop(
     is_recurrent: bool = False,
     start_step: int = 0,
     use_wandb: bool = False,
-    run_id: Optional[str] = None,
+    run_id: str | None = None,
 ) -> None:
     """Step-based training loop with checkpointing, LR scheduling, and W&B.
 
@@ -456,7 +460,7 @@ def train_loop(
         )
 
     # Training state
-    h_states = None
+    h_states: list[torch.Tensor] | None = None
     step = start_step
     loss_accum = 0.0
     t0 = time.perf_counter()
@@ -582,7 +586,7 @@ def train_one_epoch(
     model.train()
     total_loss = 0.0
     steps = 0
-    h_states = None
+    h_states: list[torch.Tensor] | None = None
     t0 = time.perf_counter()
 
     for step, (input_ids, targets) in enumerate(dataloader):

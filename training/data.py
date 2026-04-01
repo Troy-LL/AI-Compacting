@@ -17,6 +17,9 @@ a fixed number of batches into RAM so validation is deterministic and fast.
 
 from __future__ import annotations
 
+from collections.abc import Iterator
+from typing import Any
+
 import torch
 from datasets import load_dataset
 from torch.utils.data import DataLoader, Dataset, IterableDataset
@@ -92,7 +95,7 @@ class WikiStreamDataset(IterableDataset):
     # Internal
     # ------------------------------------------------------------------
 
-    def _hf_stream(self):
+    def _hf_stream(self) -> Any:
         """Return a (optionally shuffled) HuggingFace streaming dataset."""
         ds = load_dataset(
             "wikimedia/wikipedia",
@@ -109,7 +112,7 @@ class WikiStreamDataset(IterableDataset):
     # IterableDataset protocol
     # ------------------------------------------------------------------
 
-    def __iter__(self):
+    def __iter__(self) -> Iterator[tuple[torch.Tensor, torch.Tensor]]:
         tok = get_tokenizer(self.tokenizer_name)
         vocab_size = tok.vocab_size
         stride: int = self.seq_len + 1      # +1 so we can shift into targets
@@ -150,7 +153,7 @@ class FiniteDataset(Dataset):
     def __len__(self) -> int:
         return len(self._items)
 
-    def __getitem__(self, idx: int):
+    def __getitem__(self, idx: int) -> tuple[torch.Tensor, torch.Tensor]:
         return self._items[idx]
 
 
