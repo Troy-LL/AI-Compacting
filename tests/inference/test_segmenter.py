@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from inference import segmenter
+from hailp.inference import segmenter
 
 FIRST_AID_GUIDE = """First paragraph about water purification.
 

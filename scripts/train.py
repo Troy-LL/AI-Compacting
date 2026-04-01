@@ -27,16 +27,20 @@ Checkpoints are saved to::
 from __future__ import annotations
 
 import argparse
+import sys
 import time
 from pathlib import Path
 
 import torch
 from torch.cuda.amp import GradScaler
 
-from models.hailp_model import HAILPConfig, HAILPModel
-from training.data import get_dataloaders
-from training.device import DEVICE as DEFAULT_DEVICE
-from training.trainer import (
+# Ensure src is in sys.path so we can import 'hailp'
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
+
+from hailp.models.hailp_model import HAILPConfig, HAILPModel
+from hailp.training.data import get_dataloaders
+from hailp.training.device import DEVICE as DEFAULT_DEVICE
+from hailp.training.trainer import (
     CheckpointManager,
     build_optimizer,
     train_loop,

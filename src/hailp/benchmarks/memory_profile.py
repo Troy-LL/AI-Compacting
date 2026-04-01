@@ -20,19 +20,23 @@ reuse from notebooks or other scripts.
 
 from __future__ import annotations
 
+import argparse
 import sys
+import time
 from collections.abc import Iterable
 from dataclasses import dataclass
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
-
 import torch
 
-from models.hailp_model import HAILPConfig, HAILPModel
-from training.device import DEVICE as DEFAULT_DEVICE
-from training.device import DEVICE_NAME
-from training.trainer import ram_at_seq
+# Ensure src is in sys.path so we can import 'hailp'
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent))
+
+from hailp.models.baseline_gpt import BaselineConfig, BaselineGPT
+from hailp.models.hailp_model import HAILPConfig, HAILPModel
+from hailp.training.device import DEVICE as DEFAULT_DEVICE
+from hailp.training.device import DEVICE_NAME
+from hailp.training.trainer import ram_at_seq, ram_mb
 
 
 @dataclass

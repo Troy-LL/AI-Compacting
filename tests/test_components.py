@@ -12,9 +12,9 @@ import pytest
 import torch
 import torch.nn as nn
 
-from models.components.adapter import LanguageAdapter
-from models.components.low_rank import LowRankLinear
-from models.components.param_sharing import SharedFFNPool
+from hailp.models.components.adapter import LanguageAdapter
+from hailp.models.components.low_rank import LowRankLinear
+from hailp.models.components.param_sharing import SharedFFN, SharedFFNPool
 
 # ── LowRankLinear ─────────────────────────────────────────────────────────────
 

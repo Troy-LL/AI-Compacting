@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import torch
 
-from benchmarks.quantize_int4 import (
+from hailp.benchmarks.quantize_int4 import (
     load_hailp_int4,
     pack_int4_tight,
     pack_model,
@@ -12,7 +12,7 @@ from benchmarks.quantize_int4 import (
     should_quantize_int4,
     unpack_int4_tight,
 )
-from models.hailp_model import HAILPConfig, HAILPModel
+from hailp.models.hailp_model import HAILPConfig, HAILPModel
 
 
 def test_pack_unpack_roundtrip() -> None:

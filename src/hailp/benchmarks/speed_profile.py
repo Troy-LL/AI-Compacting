@@ -17,14 +17,17 @@ import sys
 import time
 from pathlib import Path
 
-# Allow importing from project root
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
-
 import torch
 
-from models.hailp_model import HAILPConfig, HAILPModel
-from training.device import DEVICE as DEFAULT_DEVICE
-from training.device import DEVICE_NAME
+# Ensure src is in sys.path so we can import 'hailp'
+# When run as a script directly from scripts/
+# But these are in src/hailp/benchmarks/
+# So we need to go up 3 levels to reach the root
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent))
+
+from hailp.models.hailp_model import HAILPConfig, HAILPModel
+from hailp.training.device import DEVICE as DEFAULT_DEVICE
+from hailp.training.device import DEVICE_NAME
 
 # ── Config (match memory_benchmark / training) ───────────────────────────────────
 

@@ -7,8 +7,8 @@ from typing import Any
 
 import pytest
 
-from inference.pipeline import HailpInferencePipeline
-from inference.tests.test_segmenter import FIRST_AID_GUIDE as first_aid_guide
+from hailp.inference.pipeline import HailpInferencePipeline
+from tests.inference.test_segmenter import FIRST_AID_GUIDE as first_aid_guide
 
 
 @dataclass(frozen=True)

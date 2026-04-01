@@ -12,7 +12,7 @@ from __future__ import annotations
 
 import torch
 
-from models.hailp_model import HAILPModel
+from hailp.models.hailp_model import HAILPModel
 
 # ── Forward pass ──────────────────────────────────────────────────────────────
 
@@ -197,7 +197,7 @@ class TestHAILPLowRankProjections:
         tiny_hailp_model: HAILPModel,
     ) -> None:
         """Time-mixing projections must be LowRankLinear instances."""
-        from models.components.low_rank import LowRankLinear
+        from hailp.models.components.low_rank import LowRankLinear
 
         for i, block in enumerate(tiny_hailp_model.blocks):
             assert isinstance(block.time_mix.w_q, LowRankLinear), (

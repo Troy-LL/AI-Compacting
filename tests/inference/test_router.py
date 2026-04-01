@@ -7,7 +7,7 @@ from typing import Any
 
 import pytest
 
-from inference.router import route_query
+from hailp.inference.router import route_query
 
 
 @dataclass(frozen=True)

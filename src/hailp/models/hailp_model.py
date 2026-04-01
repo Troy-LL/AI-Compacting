@@ -39,9 +39,9 @@ import torch.nn as nn
 import torch.nn.functional as F
 import yaml
 
-from models.components.adapter import LanguageAdapter
-from models.components.low_rank import LowRankLinear
-from models.components.param_sharing import SharedFFNPool
+from .components.adapter import LanguageAdapter
+from .components.low_rank import LowRankLinear
+from .components.param_sharing import SharedFFNPool
 
 
 @dataclass

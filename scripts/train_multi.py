@@ -3,14 +3,19 @@
 
 import argparse
 import math
+import os
+import sys
 import time
 from pathlib import Path
 
 from accelerate import Accelerator
 
-from models.hailp_model import HAILPConfig, HAILPModel
-from training.data import get_dataloaders
-from training.trainer import (
+# Ensure src is in sys.path so we can import 'hailp'
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
+
+from hailp.models.hailp_model import HAILPConfig, HAILPModel
+from hailp.training.data import get_dataloaders
+from hailp.training.trainer import (
     CheckpointManager,
     WarmupCosineScheduler,
     build_optimizer,

@@ -5,8 +5,8 @@ from __future__ import annotations
 import pytest
 import torch
 
-from models.baseline_gpt import BaselineConfig, BaselineGPT
-from models.hailp_model import HAILPConfig, HAILPModel
+from hailp.models.baseline_gpt import BaselineConfig, BaselineGPT
+from hailp.models.hailp_model import HAILPConfig, HAILPModel
 
 # ── Configs ────────────────────────────────────────────────────────────────────
 

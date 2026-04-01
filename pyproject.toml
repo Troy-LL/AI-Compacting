@@ -55,10 +55,11 @@ strict = true
 ignore_missing_imports = true
 
 [tool.pytest.ini_options]
-testpaths = ["tests", "inference/tests"]
+testpaths = ["tests"]
+pythonpath = ["src"]
 addopts = "-v --tb=short"
 filterwarnings = ["ignore::DeprecationWarning"]
 
 [tool.coverage.run]
-source = ["models", "training", "benchmarks"]
-omit = ["tests/*", "demo/*"]
+source = ["src/hailp"]
+omit = ["tests/*", "scripts/*"]
