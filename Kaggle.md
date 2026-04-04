@@ -1,6 +1,6 @@
 # Kaggle Training Setup
 
-This document contains the code blocks we will use for a Kaggle training run on the `kaggletest` branch.
+This document contains the code blocks we will use for a Kaggle training run on the `KaggleTest` branch.
 
 ## 1. Environment Check
 
@@ -21,7 +21,7 @@ print(f"CUDA: {torch.version.cuda}")
 
 ## 2. Clone Repository
 
-Clone the `kaggletest` branch of the project repository into the Kaggle working directory.
+Clone the `KaggleTest` branch of the project repository into the Kaggle working directory.
 
 ```python
 import subprocess
@@ -37,7 +37,7 @@ if os.path.exists(repo_path):
 
 result = subprocess.run([
     "git", "clone",
-    "--branch", "kaggletest",
+    "--branch", "KaggleTest",
     "https://github.com/Troy-LL/AI-Compacting.git",
     repo_path
 ], capture_output=True, text=True)
@@ -109,7 +109,7 @@ os.environ.setdefault("WANDB_MODE", "disabled")
 
 ## 6. Configuration Override and Directory Setup
 
-Change to the working directory, load the configuration, and override values for a 30k-step Kaggle run.
+Change to the working directory, load the configuration, and override values to match the 30k-step Kaggle launch.
 
 ```python
 import os
@@ -122,7 +122,7 @@ with open("configs/hailp.yaml", "r") as f:
     config = yaml.safe_load(f)
 
 config["total_steps"] = 30_000
-config["batch_size"] = 32
+config["batch_size"] = 64
 config["sequence_length"] = 256
 config["gradient_accumulation_steps"] = 4
 config["mixed_precision"] = "fp16"
@@ -131,6 +131,8 @@ config["checkpoint_every"] = 1_000
 config["log_every"] = 10
 config["val_batches"] = 200
 
+# Effective global batch = 64 * 4 * 2 GPUs = 512
+
 os.makedirs(config["checkpoint_dir"], exist_ok=True)
 
 print("Config:")
@@ -138,25 +140,9 @@ for k, v in config.items():
     print(f"  {k}: {v}")
 ```
 
-## 8. Launch the 30k-Step Run
+## 8. Generate Multi-GPU Training Script (legacy)
 
-This is the cell to use for the actual Kaggle run after the repo is cloned and the environment is ready.
-
-```python
-import subprocess
-
-subprocess.run([
-    "python",
-    "train_multi.py",
-    "--batch-size", "32",
-    "--grad-accum", "4",
-    "--seq-len", "256",
-], check=True)
-```
-
-## 9. Generate Multi-GPU Training Script (legacy)
-
-Run this cell only if you want to regenerate `train_multi.py` inside your Kaggle workspace.
+Run this cell only if you want to regenerate `train_multi.py` inside your Kaggle workspace. Re-running this block overwrites the repo file.
 
 ```python
 %%writefile train_multi.py
@@ -253,6 +239,7 @@ def main():
     parser.add_argument("--no-wandb", action="store_true")
     parser.add_argument("--batch-size", type=int, default=None)
     parser.add_argument("--seq-len", type=int, default=None)
+    parser.add_argument("--grad-accum", type=int, default=None)
     parser.add_argument("--learning-rate", type=float, default=None)
     parser.add_argument("--checkpoint-every", type=int, default=None)
     args = parser.parse_args()
@@ -267,6 +254,8 @@ def main():
         config["batch_size"] = args.batch_size
     if args.seq_len is not None:
         config["sequence_length"] = args.seq_len
+    if args.grad_accum is not None:
+        config["gradient_accumulation_steps"] = args.grad_accum
     if args.learning_rate is not None:
         config["learning_rate"] = args.learning_rate
     if args.checkpoint_every is not None:
@@ -413,24 +402,24 @@ if __name__ == "__main__":
     main()
 ```
 
-## 8. Run Training (Multi-GPU)
+## 9. Launch the 30k-Step Run
 
-Launch the training script using HuggingFace Accelerate so that it correctly spans across both your T4 GPUs!
+Use this as the primary launch command on Kaggle Dual T4 so training actually runs distributed across both GPUs.
 
 ```python
-import sys
 import os
 
 os.chdir("/kaggle/working/hailp")
 
-# batch-size 64 per GPU = effective global batch of 512 (64 × 4 accum × 2 GPUs)
-# batch 128 OOMs because logits (128,256,50257) + cross_entropy softmax > 15GB T4 VRAM
-
+# Per-GPU micro-batch 64 with grad accumulation 4 on 2 GPUs
+# => effective global batch = 64 * 4 * 2 = 512
 !accelerate launch --multi_gpu --num_processes 2 --mixed_precision fp16 train_multi.py \
-    --steps 1000 \
+    --steps 30000 \
     --batch-size 64 \
+    --grad-accum 4 \
+    --seq-len 256 \
     --learning-rate 0.0006 \
-    --checkpoint-every 50 \
-    --resume
-
+    --checkpoint-every 1000
 ```
+
+If you need a quick single-process fallback, run `python train_multi.py --batch-size 32 --seq-len 256`.
