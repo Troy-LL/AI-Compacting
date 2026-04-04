@@ -4,6 +4,10 @@
 import argparse
 import math
 import os
+
+# Avoid memory fragmentation in PyTorch
+os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "expandable_segments:True"
+
 import time
 from pathlib import Path
 
@@ -31,8 +35,8 @@ except ImportError:
 # Copy DEFAULT_CONFIG from train.py
 DEFAULT_CONFIG = {
     "sequence_length": 256,
-    "batch_size": 32,
-    "gradient_accumulation_steps": 4,
+    "batch_size": 16,
+    "gradient_accumulation_steps": 8,
     "learning_rate": 3e-4,
     "weight_decay": 0.1,
     "gradient_clip": 1.0,
@@ -105,7 +109,7 @@ def main():
         print(f"\n🚀 Using {accelerator.num_processes} GPUs/processes via Accelerate! 🚀\n")
 
     # ----- BUILD MODEL & DATA -----
-    cfg = HAILPConfig(layers=12, hidden_dim=512, ffn_sharing_group_size=4, low_rank_dim=64, adapter_rank=32, dropout=0.1)
+    cfg = HAILPConfig(vocab_size=50_257, layers=12, hidden_dim=512, ffn_sharing_group_size=4, low_rank_dim=64, adapter_rank=32, dropout=0.1)
     base_model = HAILPModel(cfg)
     model = LossWrapper(base_model)
     is_recurrent = True
@@ -175,8 +179,11 @@ def main():
             if accelerator.sync_gradients:
                 # Clip norms (using accelerate safe method)
                 accelerator.clip_grad_norm_(model.parameters(), config["gradient_clip"])
-                optimizer.step()
-                optimizer.zero_grad()
+            
+            optimizer.step()
+            optimizer.zero_grad()
+            
+            if accelerator.sync_gradients:
                 step += 1
 
         if is_recurrent and h_states is not None:
@@ -215,7 +222,7 @@ def main():
             t0 = time.perf_counter()
 
         # Checkpoint / Eval
-        if (step % config["checkpoint_every"] == 0 or step == config["total_steps"]) and accelerator.is_main_process:
+        if accelerator.sync_gradients and (step % config["checkpoint_every"] == 0 or step == config["total_steps"]) and accelerator.is_main_process:
             # We explicitly unwrap the model to evaluate and save so that weights correspond perfectly to original names!
             unwrapped_model = accelerator.unwrap_model(model).model
             val_metrics = evaluate(unwrapped_model, val_loader, device, is_recurrent=True)

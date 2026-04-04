@@ -135,16 +135,16 @@ with open("configs/hailp.yaml", "r") as f:
     config = yaml.safe_load(f)
 
 config["total_steps"] = 30_000
-config["batch_size"] = 64
+config["batch_size"] = 16
 config["sequence_length"] = 256
-config["gradient_accumulation_steps"] = 4
+config["gradient_accumulation_steps"] = 16
 config["mixed_precision"] = "fp16"
 config["checkpoint_dir"] = "/kaggle/working/checkpoints"
 config["checkpoint_every"] = 1_000
 config["log_every"] = 10
 config["val_batches"] = 200
 
-# Effective global batch = 64 * 4 * 2 GPUs = 512
+# Effective global batch = 16 * 16 * 2 GPUs = 512
 
 os.makedirs(config["checkpoint_dir"], exist_ok=True)
 
@@ -227,8 +227,8 @@ class LossWrapper(nn.Module):
 # ── Config ──────────────────────────────────────────────────────────────
 DEFAULT_CONFIG = {
     "sequence_length": 256,
-    "batch_size": 32,
-    "gradient_accumulation_steps": 4,
+    "batch_size": 16,
+    "gradient_accumulation_steps": 16,
     "learning_rate": 3e-4,
     "weight_decay": 0.1,
     "gradient_clip": 1.0,
@@ -425,15 +425,15 @@ import os
 
 os.chdir("/kaggle/working/hailp")
 
-# Per-GPU micro-batch 64 with grad accumulation 4 on 2 GPUs
-# => effective global batch = 64 * 4 * 2 = 512
+# Per-GPU micro-batch 16 with grad accumulation 16 on 2 GPUs
+# => effective global batch = 16 * 16 * 2 = 512
 !accelerate launch --multi_gpu --num_processes 2 --num_machines 1 --dynamo_backend no --mixed_precision fp16 train_multi.py \
     --steps 30000 \
-    --batch-size 64 \
-    --grad-accum 4 \
+    --batch-size 16 \
+    --grad-accum 16 \
     --seq-len 256 \
     --learning-rate 0.0006 \
     --checkpoint-every 1000
 ```
 
-If you need a quick single-process fallback, run `python train_multi.py --batch-size 32 --seq-len 256`.
+If you need a quick single-process fallback, run `python train_multi.py --batch-size 16 --seq-len 256`.
