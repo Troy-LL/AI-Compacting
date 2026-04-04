@@ -98,14 +98,12 @@ print("Dependencies installed")
 Authenticate to the Hugging Face Hub using a token stored in Kaggle Secrets as `HF_TOKEN`. Do not hardcode it in the notebook.
 
 ```python
-import os
+from kaggle_secrets import UserSecretsClient
 from huggingface_hub import login
 
-hf_token = os.environ.get("HF_TOKEN")
-if hf_token:
-    login(token=hf_token)
-else:
-    print("HF_TOKEN not set; downloads may be rate-limited.")
+hf_token = UserSecretsClient().get_secret("HF_TOKEN")
+login(token=hf_token)
+print("HF login OK")
 ```
 
 ## 6. Weights & Biases Login
