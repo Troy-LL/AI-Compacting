@@ -1,6 +1,6 @@
-# Kaggle Testing Setup
+# Kaggle Training Setup
 
-This document contains the specific code blocks and snippets we will use for testing our LLM Compact project in a Kaggle notebook environment.
+This document contains the code blocks we will use for a Kaggle training run on the `kaggletest` branch.
 
 ## 1. Environment Check
 
@@ -9,15 +9,19 @@ Run this block to verify the GPU and PyTorch version available.
 ```python
 import torch
 
-print(f"GPU: {torch.cuda.get_device_name(0)}")
-print(f"VRAM: {torch.cuda.get_device_properties(0).total_memory / 1e9:.1f}GB")
+if torch.cuda.is_available():
+    print(f"GPU: {torch.cuda.get_device_name(0)}")
+    print(f"VRAM: {torch.cuda.get_device_properties(0).total_memory / 1e9:.1f}GB")
+else:
+    print("GPU: not available")
+
 print(f"PyTorch: {torch.__version__}")
 print(f"CUDA: {torch.version.cuda}")
 ```
 
 ## 2. Clone Repository
 
-Clone the specific branch of the project repository into the Kaggle working directory.
+Clone the `kaggletest` branch of the project repository into the Kaggle working directory.
 
 ```python
 import subprocess
@@ -33,7 +37,7 @@ if os.path.exists(repo_path):
 
 result = subprocess.run([
     "git", "clone",
-    "--branch", "Block2",
+    "--branch", "kaggletest",
     "https://github.com/Troy-LL/AI-Compacting.git",
     repo_path
 ], capture_output=True, text=True)
@@ -91,19 +95,21 @@ print("Dependencies installed")
 
 ## 5. Weights & Biases Login
 
-Authenticate with your wandb account using your API key. By setting this purely via the environment, we avoid Jupyter kernel circular import issues!
+Authenticate with your wandb account using your API key or `wandb login`. Avoid hardcoding secrets in the notebook.
 
 ```python
 import os
 
-# Set the key directly in the environment. 
-# Your train.py script will automatically detect and use this when it launches later!
-os.environ["WANDB_API_KEY"] = "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"
+# Option 1: set the key through Kaggle Secrets or your notebook environment.
+# os.environ["WANDB_API_KEY"] = os.environ.get("WANDB_API_KEY", "")
+
+# Option 2: disable W&B for an offline run.
+os.environ.setdefault("WANDB_MODE", "disabled")
 ```
 
 ## 6. Configuration Override and Directory Setup
 
-Change to the working directory, load the configuration, and override values for a quick sanity check.
+Change to the working directory, load the configuration, and override values for a 30k-step Kaggle run.
 
 ```python
 import os
@@ -111,18 +117,19 @@ import yaml
 
 os.chdir("/kaggle/working/hailp")
 
-# Override config for sanity check
+# Load the project config and override it for Kaggle.
 with open("configs/hailp.yaml", "r") as f:
     config = yaml.safe_load(f)
 
-# Temporarily override for quick test
-config["total_steps"] = 250
-config["batch_size"] = 32   # Per-GPU micro-batch (gradient accum compensates)
-config["seq_len"] = 256
-config["device"] = "cuda"
+config["total_steps"] = 30_000
+config["batch_size"] = 32
+config["sequence_length"] = 256
+config["gradient_accumulation_steps"] = 4
+config["mixed_precision"] = "fp16"
 config["checkpoint_dir"] = "/kaggle/working/checkpoints"
-config["checkpoint_every"] = 250
-config["log_every"] = 10   # Already set to 10
+config["checkpoint_every"] = 1_000
+config["log_every"] = 10
+config["val_batches"] = 200
 
 os.makedirs(config["checkpoint_dir"], exist_ok=True)
 
@@ -131,9 +138,25 @@ for k, v in config.items():
     print(f"  {k}: {v}")
 ```
 
-## 7. Generate Multi-GPU Training Script
+## 8. Launch the 30k-Step Run
 
-Run this cell to immediately generate the completely custom `train_multi.py` directly inside your Kaggle workspace without needing to use `git push`!
+This is the cell to use for the actual Kaggle run after the repo is cloned and the environment is ready.
+
+```python
+import subprocess
+
+subprocess.run([
+    "python",
+    "train_multi.py",
+    "--batch-size", "32",
+    "--grad-accum", "4",
+    "--seq-len", "256",
+], check=True)
+```
+
+## 9. Generate Multi-GPU Training Script (legacy)
+
+Run this cell only if you want to regenerate `train_multi.py` inside your Kaggle workspace.
 
 ```python
 %%writefile train_multi.py
