@@ -93,7 +93,22 @@ subprocess.run([
 print("Dependencies installed")
 ```
 
-## 5. Weights & Biases Login
+## 5. Hugging Face Hub Login
+
+Authenticate to the Hugging Face Hub using a token stored in Kaggle Secrets as `HF_TOKEN`. Do not hardcode it in the notebook.
+
+```python
+import os
+from huggingface_hub import login
+
+hf_token = os.environ.get("HF_TOKEN")
+if hf_token:
+    login(token=hf_token)
+else:
+    print("HF_TOKEN not set; downloads may be rate-limited.")
+```
+
+## 6. Weights & Biases Login
 
 Authenticate with your wandb account using your API key or `wandb login`. Avoid hardcoding secrets in the notebook.
 
@@ -107,7 +122,7 @@ import os
 os.environ.setdefault("WANDB_MODE", "disabled")
 ```
 
-## 6. Configuration Override and Directory Setup
+## 7. Configuration Override and Directory Setup
 
 Change to the working directory, load the configuration, and override values to match the 30k-step Kaggle launch.
 
@@ -402,6 +417,7 @@ if __name__ == "__main__":
     main()
 ```
 
+
 ## 9. Launch the 30k-Step Run
 
 Use this as the primary launch command on Kaggle Dual T4 so training actually runs distributed across both GPUs.
@@ -413,7 +429,7 @@ os.chdir("/kaggle/working/hailp")
 
 # Per-GPU micro-batch 64 with grad accumulation 4 on 2 GPUs
 # => effective global batch = 64 * 4 * 2 = 512
-!accelerate launch --multi_gpu --num_processes 2 --mixed_precision fp16 train_multi.py \
+!accelerate launch --multi_gpu --num_processes 2 --num_machines 1 --dynamo_backend no --mixed_precision fp16 train_multi.py \
     --steps 30000 \
     --batch-size 64 \
     --grad-accum 4 \
