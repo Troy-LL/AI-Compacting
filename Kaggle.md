@@ -1,6 +1,6 @@
-# Kaggle Testing Setup
+# Kaggle Training Setup
 
-This document contains the specific code blocks and snippets we will use for testing our LLM Compact project in a Kaggle notebook environment.
+This document contains the code blocks we will use for a Kaggle training run on the `KaggleTest` branch.
 
 ## 1. Environment Check
 
@@ -9,15 +9,19 @@ Run this block to verify the GPU and PyTorch version available.
 ```python
 import torch
 
-print(f"GPU: {torch.cuda.get_device_name(0)}")
-print(f"VRAM: {torch.cuda.get_device_properties(0).total_memory / 1e9:.1f}GB")
+if torch.cuda.is_available():
+    print(f"GPU: {torch.cuda.get_device_name(0)}")
+    print(f"VRAM: {torch.cuda.get_device_properties(0).total_memory / 1e9:.1f}GB")
+else:
+    print("GPU: not available")
+
 print(f"PyTorch: {torch.__version__}")
 print(f"CUDA: {torch.version.cuda}")
 ```
 
 ## 2. Clone Repository
 
-Clone the specific branch of the project repository into the Kaggle working directory.
+Clone the `KaggleTest` branch of the project repository into the Kaggle working directory.
 
 ```python
 import subprocess
@@ -33,7 +37,7 @@ if os.path.exists(repo_path):
 
 result = subprocess.run([
     "git", "clone",
-    "--branch", "Block2",
+    "--branch", "KaggleTest",
     "https://github.com/Troy-LL/AI-Compacting.git",
     repo_path
 ], capture_output=True, text=True)
@@ -89,21 +93,36 @@ subprocess.run([
 print("Dependencies installed")
 ```
 
-## 5. Weights & Biases Login
+## 5. Hugging Face Hub Login
 
-Authenticate with your wandb account using your API key. By setting this purely via the environment, we avoid Jupyter kernel circular import issues!
+Authenticate to the Hugging Face Hub using a token stored in Kaggle Secrets as `HF_TOKEN`. Do not hardcode it in the notebook.
+
+```python
+from kaggle_secrets import UserSecretsClient
+from huggingface_hub import login
+
+hf_token = UserSecretsClient().get_secret("HF_TOKEN")
+login(token=hf_token)
+print("HF login OK")
+```
+
+## 6. Weights & Biases Login
+
+Authenticate with your wandb account using your API key or `wandb login`. Avoid hardcoding secrets in the notebook.
 
 ```python
 import os
 
-# Set the key directly in the environment. 
-# Your train.py script will automatically detect and use this when it launches later!
-os.environ["WANDB_API_KEY"] = "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"
+# Option 1: set the key through Kaggle Secrets or your notebook environment.
+# os.environ["WANDB_API_KEY"] = os.environ.get("WANDB_API_KEY", "")
+
+# Option 2: disable W&B for an offline run.
+os.environ.setdefault("WANDB_MODE", "disabled")
 ```
 
-## 6. Configuration Override and Directory Setup
+## 7. Configuration Override and Directory Setup
 
-Change to the working directory, load the configuration, and override values for a quick sanity check.
+Change to the working directory, load the configuration, and override values to match the 30k-step Kaggle launch.
 
 ```python
 import os
@@ -111,18 +130,21 @@ import yaml
 
 os.chdir("/kaggle/working/hailp")
 
-# Override config for sanity check
+# Load the project config and override it for Kaggle.
 with open("configs/hailp.yaml", "r") as f:
     config = yaml.safe_load(f)
 
-# Temporarily override for quick test
-config["total_steps"] = 250
-config["batch_size"] = 32   # Per-GPU micro-batch (gradient accum compensates)
-config["seq_len"] = 256
-config["device"] = "cuda"
+config["total_steps"] = 30_000
+config["batch_size"] = 16
+config["sequence_length"] = 256
+config["gradient_accumulation_steps"] = 16
+config["mixed_precision"] = "fp16"
 config["checkpoint_dir"] = "/kaggle/working/checkpoints"
-config["checkpoint_every"] = 250
-config["log_every"] = 10   # Already set to 10
+config["checkpoint_every"] = 1_000
+config["log_every"] = 10
+config["val_batches"] = 200
+
+# Effective global batch = 16 * 16 * 2 GPUs = 512
 
 os.makedirs(config["checkpoint_dir"], exist_ok=True)
 
@@ -131,9 +153,9 @@ for k, v in config.items():
     print(f"  {k}: {v}")
 ```
 
-## 7. Generate Multi-GPU Training Script
+## 8. Generate Multi-GPU Training Script (legacy)
 
-Run this cell to immediately generate the completely custom `train_multi.py` directly inside your Kaggle workspace without needing to use `git push`!
+Run this cell only if you want to regenerate `train_multi.py` inside your Kaggle workspace. Re-running this block overwrites the repo file.
 
 ```python
 %%writefile train_multi.py
@@ -205,8 +227,8 @@ class LossWrapper(nn.Module):
 # ── Config ──────────────────────────────────────────────────────────────
 DEFAULT_CONFIG = {
     "sequence_length": 256,
-    "batch_size": 32,
-    "gradient_accumulation_steps": 4,
+    "batch_size": 16,
+    "gradient_accumulation_steps": 16,
     "learning_rate": 3e-4,
     "weight_decay": 0.1,
     "gradient_clip": 1.0,
@@ -230,6 +252,7 @@ def main():
     parser.add_argument("--no-wandb", action="store_true")
     parser.add_argument("--batch-size", type=int, default=None)
     parser.add_argument("--seq-len", type=int, default=None)
+    parser.add_argument("--grad-accum", type=int, default=None)
     parser.add_argument("--learning-rate", type=float, default=None)
     parser.add_argument("--checkpoint-every", type=int, default=None)
     args = parser.parse_args()
@@ -244,6 +267,8 @@ def main():
         config["batch_size"] = args.batch_size
     if args.seq_len is not None:
         config["sequence_length"] = args.seq_len
+    if args.grad_accum is not None:
+        config["gradient_accumulation_steps"] = args.grad_accum
     if args.learning_rate is not None:
         config["learning_rate"] = args.learning_rate
     if args.checkpoint_every is not None:
@@ -390,24 +415,25 @@ if __name__ == "__main__":
     main()
 ```
 
-## 8. Run Training (Multi-GPU)
 
-Launch the training script using HuggingFace Accelerate so that it correctly spans across both your T4 GPUs!
+## 9. Launch the 30k-Step Run
+
+Use this as the primary launch command on Kaggle Dual T4 so training actually runs distributed across both GPUs.
 
 ```python
-import sys
 import os
 
 os.chdir("/kaggle/working/hailp")
 
-# batch-size 64 per GPU = effective global batch of 512 (64 × 4 accum × 2 GPUs)
-# batch 128 OOMs because logits (128,256,50257) + cross_entropy softmax > 15GB T4 VRAM
-
-!accelerate launch --multi_gpu --num_processes 2 --mixed_precision fp16 train_multi.py \
-    --steps 1000 \
-    --batch-size 64 \
+# Per-GPU micro-batch 16 with grad accumulation 16 on 2 GPUs
+# => effective global batch = 16 * 16 * 2 = 512
+!accelerate launch --multi_gpu --num_processes 2 --num_machines 1 --dynamo_backend no --mixed_precision fp16 train_multi.py \
+    --steps 30000 \
+    --batch-size 16 \
+    --grad-accum 16 \
+    --seq-len 256 \
     --learning-rate 0.0006 \
-    --checkpoint-every 50 \
-    --resume
-
+    --checkpoint-every 1000
 ```
+
+If you need a quick single-process fallback, run `python train_multi.py --batch-size 16 --seq-len 256`.
