@@ -1,6 +1,6 @@
-H(AI)LP — Architecture Comparison: Baseline GPT vs H(AI)LP RWKV
+# H(AI)LP
 
-Two 50M-parameter language models trained on the same data, differing only in architecture.
+Two 50M-parameter language models trained on the same data, differing only in architecture. The question is how small intelligence can get and still be useful when things are bad.
 
 ## The Core Claim
 
