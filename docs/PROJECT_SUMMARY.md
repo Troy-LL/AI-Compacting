@@ -1,5 +1,7 @@
 # H(AI)LP — Project Summary & Metrics
 
+**Season note.** The thesis lives in [`PAPER.md`](PAPER.md). Figures below are engineering notes from the scaffold (including short Kaggle smokes and *projected* Android sizes). They are **not** paper results and must not be copied into Claim P/R tables.
+
 ## What the project does
 
 **H(AI)LP** compares two language-model architectures at a similar parameter scale:
