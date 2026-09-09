@@ -76,7 +76,7 @@ Companion to [`PAPER.md`](PAPER.md). Every figure here is from a paper, a standa
 The following appear in older README / `PROJECT_SUMMARY.md` / Kaggle notes. They are **not** literature and **not** paper results:
 
 - 1,000-step Kaggle dual-T4 train loss / val PPL.
-- Projected 360M INT4 Android footprints and “survival tool” RAM tables.
+- Projected 360M INT4 Android footprints and legacy RAM tables.
 - Scaled-from-18.5M INT4 size projections.
 - Demo CPU tokens/s as architecture proof.
 

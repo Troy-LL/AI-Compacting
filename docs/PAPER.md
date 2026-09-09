@@ -30,7 +30,7 @@ Do not stack Claim P and Claim R in a single table or a single “we win” sent
 | Model class | 1–7B dense (INT4 weights) | ~50M class, same data |
 | Primary evidence this season | Literature bounds | Gap + protocol (no run) |
 | Architecture | One published dense class per row | H(AI)LP fixed-state vs GPT is a *candidate*, not the claim |
-| Forbidden merge | Do not put Phi-3 MMLU next to a 50M perplexity and call it one result | Do not put a survival slogan in a parameter table |
+| Forbidden merge | Do not put Phi-3 MMLU next to a 50M perplexity and call it one result | Do not put a product slogan in a parameter table |
 
 Thesis **A (data)** is primary. Thesis **B (architecture)** is related: if the curriculum is held fixed, does a constant-state model buy a longer usable \(T\) inside the same RSS cap? That question is not answered this season.
 
@@ -111,12 +111,12 @@ This repo’s H(AI)LP model is an RWKV-style time-mix with a fixed \(h\)-state, 
 
 It is not:
 
-- a survival radio
+- a field appliance
 - a 360M Android product
 - a substitute for Claim P’s 1–3B band
 - a result
 
-No HAILP “survival” language belongs in a parameter table. No Kaggle smoke-train loss belongs in a competence table. Those are engineering notes, not paper claims.
+No HAILP manifesto language belongs in a parameter table. No Kaggle smoke-train loss belongs in a competence table. Those are engineering notes, not paper claims.
 
 ### 3.4 Crossover \(T^*\)
 
@@ -289,7 +289,7 @@ We do not claim, without a run:
 - that CCR beats Wikipedia, FineWeb, FineWeb-Edu, TinyStories, or Phi’s pipeline
 - that a ~50M model is a phone chatty generalist
 - that H(AI)LP is more competent than GPT at the same data
-- that H(AI)LP is a survival product, a 360M Android build, or a FAISS-augmented appliance
+- that H(AI)LP is a phone product, a 360M Android build, or a FAISS-augmented appliance
 - that analogical reasoning is solved, in us or in the literature
 - that MMLU under 300M (or at 50M) is a meaningful primary score
 - that MoE or sub-INT4 is a phone win

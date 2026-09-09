@@ -75,7 +75,7 @@ Held-out comparison is in the conditions. Underfit and shift are contrasts, not 
 
 ### C-kv-cache-vs-fixed-state-001
 
-Claim **R** material: process memory vs sequence length. Not a phone product. Not a survival slogan. Not Claim P.
+Claim **R** material: process memory vs sequence length. Not a phone product. Not a product slogan. Not Claim P.
 
 ```json
 {
@@ -305,6 +305,6 @@ Simile, no checkable \(R\), no near-miss, domains collapse into decoration.
 - It does not set a Chinchilla token budget (**TODO-cite** the Hoffmann et al., 2022 row if a run is ever authorized).
 - It does not score Claim P.
 - It does not claim analogical reasoning is solved.
-- It does not put H(AI)LP survival language on a card.
+- It does not put H(AI)LP manifesto language on a card.
 
 Further cards, if any, get the same checklist. Volume is not rigor.

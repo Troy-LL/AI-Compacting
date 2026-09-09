@@ -185,7 +185,7 @@ Android app (user interface)
 
 The model architecture remains entirely HAILP; llama.cpp simply provides the **runtime and GGUF container** for small INT4 models on constrained hardware (including RWKV‑style models).
 
-### The Honest RAM Breakdown (Target: 2GB–4GB Devices)
+### Projected RAM on 2GB–4GB devices (engineering note, not a paper result)
 
 A typical budget Android phone with **2GB total RAM** is extremely constrained at idle:
 
@@ -199,7 +199,7 @@ When H(AI)LP loads (INT4, 360M parameter scale):
 - **FAISS Index & Knowledge Base:** 100–150 MB.
 - **Total app footprint:** 550–700 MB.
 
-**Conclusion:** On a 2GB device, you are operating right at the functional edge. For a survival tool where reliability is non-negotiable, the requirements are:
+**Conclusion:** On a 2GB device, you are operating right at the functional edge. For a later on-device probe where process crashes are unacceptable, the engineering notes were:
 
 | RAM Status | Device Total RAM | Operational State |
 |------------|------------------|-------------------|
