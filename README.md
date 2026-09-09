@@ -4,7 +4,8 @@
 
 Thesis owner: [`docs/PAPER.md`](docs/PAPER.md)  
 Must-cites: [`docs/LITERATURE.md`](docs/LITERATURE.md)  
-Eval freeze: [`docs/eval-protocol.md`](docs/eval-protocol.md)
+Eval freeze: [`docs/eval-protocol.md`](docs/eval-protocol.md)  
+CCR protocol: [`docs/ccr-spec.md`](docs/ccr-spec.md) · samples: [`docs/ccr-samples.md`](docs/ccr-samples.md)
 
 Author: Troy.
 
@@ -34,6 +35,8 @@ The tree still has a ~50M GPT vs H(AI)LP scaffold, tests, and trainers. They are
 docs/PAPER.md              thesis
 docs/LITERATURE.md         must-cites
 docs/eval-protocol.md      freeze + first-run table (empty)
+docs/ccr-spec.md           CCR operational protocol
+docs/ccr-samples.md        CCR example shapes (not a corpus)
 src/hailp/                 optional ~50M GPT / H(AI)LP scaffold
 scripts/train.py           later
 scripts/train_multi.py     later
