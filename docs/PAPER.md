@@ -2,7 +2,7 @@
 
 **Author:** Troy  
 **Season:** theoretical paper — no new training runs  
-**Repo role:** this file is the thesis owner. Literature notes live in [`LITERATURE.md`](LITERATURE.md). The eval freeze lives in [`eval-protocol.md`](eval-protocol.md). Training scripts in this repo are later / optional.
+**Repo role:** this file is the thesis owner. Literature notes live in [`LITERATURE.md`](LITERATURE.md). The eval freeze lives in [`eval-protocol.md`](eval-protocol.md). CCR operations live in [`ccr-spec.md`](ccr-spec.md). Training scripts in this repo are later / optional.
 
 **Standing rule.** We do not claim a result without a run. This season states bounds, a gap, a protocol, and kill criteria. Numbers below are from published work or from arithmetic identities (for example, INT4 weight bytes \(\approx 0.5 \times N\)). Anything not pinned to a source is marked **TODO-cite**.
 
@@ -129,6 +129,8 @@ Literature gives the *shape*: KV grows with length (Pope et al., 2023; standard 
 ## 4. Own innovation — Compact Curriculum Recipe (CCR)
 
 This is the original object. It is a **protocol**, not a win.
+
+**Operational home:** [`ccr-spec.md`](ccr-spec.md) (card schema, validation checklist, failure-mode catalog, sequencing, edge cases). Example shapes, not a corpus: [`ccr-samples.md`](ccr-samples.md). This section states the hypothesis and the in/out rules; it does not duplicate the catalog.
 
 The Phi line showed that *textbook-quality* data can move small models (Gunasekar et al., 2023; Abdin et al., 2024). FineWeb-Edu (Penedo et al., 2024) showed that educational filtering of web text is a scalable cousin of that idea. Neither paper publishes an operational three-stratum recipe with in/out rules aimed at *master-of-none multi-skill* under a phone RSS cap. That recipe is ours to state and, later, to test.
 
