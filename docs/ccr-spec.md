@@ -237,7 +237,7 @@ Run **in order**. First FAIL stops the card (still record every fail you saw). M
 | V-M5 | T: `uses.length ≥ 1`; `problem`, `method`, `solution`, `check`, `exercise` non-empty. Every `uses[]` ∈ `concept_ids[]`. | T | reject |
 | V-M6 | `license` is not `unknown` and not empty. `source_id` is a locator, not a slogan. | all | reject |
 | V-M7 | `version ≥ 1` integer. Duplicate `id` at a different lock without a bump: fail. | all | reject |
-| V-M8 | No illegal result fields on the card (`mmlu`, `task_success`, `ppl`, `phone_rss`, survival slogans as metrics). | all | reject |
+| V-M8 | No illegal result fields on the card (`mmlu`, `task_success`, `ppl`, `phone_rss`, product slogans as metrics). | all | reject |
 
 #### Semantic (human or agent-with-judgment)
 
@@ -263,7 +263,7 @@ Run **in order**. First FAIL stops the card (still record every fail you saw). M
 | V-H2 | Synthetic C/A/T: in-rules hold. A prompt template is not sufficient. LLM-shaped fluff fails. | all | reject |
 | V-H3 | License and source are honest. License-wall paste, scraped ToS-blocked text, or missing attribution fails. | all | reject |
 | V-H4 | No eval leak: card is not `eval.jsonl` item, paraphrase, or near-duplicate (once that file exists). Until freeze, treat the *future* eval as off-limits for cute “preview” items. | all | reject |
-| V-H5 | No HAILP / survival-radio / 360M-Android-product language. No stacking Claim P into the card. | all | reject |
+| V-H5 | No HAILP-manifesto / 360M-Android-product language. No stacking Claim P into the card. | all | reject |
 | V-H6 | Chatty instruction tone does not create a fourth training stratum. Chat probes live in the eval slice, not as un-checked T. | all | rewrite |
 
 **PASS** = all applicable rows PASS. **FAIL** = any row FAIL. There is no “mostly CCR.”
@@ -395,9 +395,9 @@ Mitigation vocabulary:
 
 **Mitigation:** **kill** the comparison. Same tokenizer, same ~50M class, **same pre-registered token budget**, same frozen eval. A mismatched control is not a control.
 
-#### FM-K06 HAILP survival language in CCR docs
+#### FM-K06 HAILP manifesto language in CCR docs
 
-**Shows up as:** CCR described as a survival radio, a 360M Android product, a FAISS appliance, or “minimum viable intelligence in the worst circumstances” as if that were this protocol.
+**Shows up as:** CCR described as a field appliance, a 360M Android product, a FAISS appliance, or an old product slogan as if that were this protocol.
 
 **Mitigation:** **rewrite** the doc sentence. **reject** any card that uses that language (V-H5). Engineering notes stay in [`PROJECT_SUMMARY.md`](PROJECT_SUMMARY.md) / [`Kaggle.md`](Kaggle.md) and are not paper results.
 
@@ -461,7 +461,7 @@ Mitigation vocabulary:
 | FM-K03 | Mixture drift unlogged | curriculum | log; kill first-run status |
 | FM-K04 | Under-train vs Chinchilla | curriculum | log TODO-cite; do not kill hypothesis for under-train |
 | FM-K05 | Token-budget confounding | curriculum | kill comparison |
-| FM-K06 | HAILP survival language | curriculum | rewrite doc; reject card |
+| FM-K06 | HAILP manifesto language | curriculum | rewrite doc; reject card |
 | FM-K07 | Stacking Claim P into R | curriculum | kill stacked claim |
 | FM-E01 | MMLU-under-300M | eval | reject as primary |
 | FM-E02 | Unfrozen eval | eval | kill reported-run status |
@@ -597,7 +597,7 @@ Do **not** park:
 | Perfect `text` with empty fields | FAIL mechanical. Do not reverse-engineer fields after the fact to launder a blog post. |
 | Chat / instruction unit | Eval slice only ([`eval-protocol.md`](eval-protocol.md)). Not a fourth train stratum. |
 | Duplicate lock, new prose | `version` bump on the same `id`, or a new id if it is a *different* lock. Near-dup of eval still FM-C13. |
-| H(AI)LP / KV vs state as content | Legitimate **Claim R** C/T material. Still no survival language, no Claim P stack (FM-K06, FM-K07). |
+| H(AI)LP / KV vs state as content | Legitimate **Claim R** C/T material. Still no manifesto language, no Claim P stack (FM-K06, FM-K07). |
 | Wanting MMLU “just as a side table” | FM-E01. Side tables become headlines. Don’t. |
 
 ---

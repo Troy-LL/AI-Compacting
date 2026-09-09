@@ -1,0 +1,1 @@
+Paper-first research: literature bounds for phone chatty LLMs (≈1–3B INT4) and min-params multi-skill competence under a fixed process-RSS budget. Original hypothesis: Compact Curriculum Recipe (CCR). No claimed wins without a run.
