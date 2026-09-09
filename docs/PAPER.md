@@ -65,11 +65,11 @@ Process RSS is larger (KV cache or recurrent state, activations, runtime). Claim
 
 **Existence of a phone-local chatty 4B-class model.** Phi-3-mini is 3.8B parameters, trained on 3.3T tokens. Abdin et al. (2024) report that 4-bit quantization occupies \(\approx\) 1.8 GB, and that the quantized model ran fully offline on an iPhone 14 (A16 Bionic) at more than 12 tokens/s. This is the strongest public existence proof that a *chatty generalist* can live on a modern phone. It sits just above the 1.5 GB / 3B arithmetic mark; we cite it as the published 4B-class point, not as our measurement.
 
-**On-device design envelope, including a stricter mid-tier reading.** MobileLLM (Liu et al., 2024, ICML) targets sub-billion and 1–1.5B models for on-device use. The paper’s DRAM figure is 6–12 GB on then-current phones, and it argues a foreground app should not take more than about 10% of DRAM because the OS and other apps share it. That 10% rule is *their* deployment heuristic, not a universal OS fact. It is why they treat LLaMA-2 7B at 8-bit as prohibitively expensive in main memory and motivate 125M / 350M / 600M / 1B / 1.5B. They also give an energy order-of-magnitude of 0.1 J/token per billion parameters (citing earlier hardware energy models). We treat that joule figure as a literature estimate, not a phone-lab number.
+**On-device design envelope, including a stricter mid-tier reading.** MobileLLM (Liu et al., 2024, ICML) targets on-device use at sub-billion scale. The ICML / arXiv:2402.14905 tables report **125M and 350M** (plus layer-share / +LS variants). Larger Hugging Face MobileLLM variants (600M / 1B / 1.5B) are separate releases — **TODO-cite if used**; do not list them as ICML result rows. The paper’s DRAM figure is 6–12 GB on then-current phones, and it argues a foreground app should not take more than about 10% of DRAM because the OS and other apps share it. That 10% rule is *their* deployment heuristic, not a universal OS fact. It is why they treat LLaMA-2 7B at 8-bit as prohibitively expensive in main memory and motivate the reported 125M / 350M family. They also give an energy order-of-magnitude of 0.1 J/token per billion parameters (citing earlier hardware energy models). We treat that joule figure as a literature estimate, not a phone-lab number.
 
 Tension, not contradiction: MobileLLM’s 10% DRAM heuristic pushes toward \(\le\)1B on mid-tier RAM. Phi-3’s iPhone 14 run shows a 3.8B 4-bit model can execute on a high-end 6 GB class device. Claim P’s 1–3B INT4 band is the *envelope between those readings*, not a single device’s headroom.
 
-**Compression bound, not the phone stack.** BitNet b1.58 (Ma et al., 2024) trains ternary weights. At 3B, they report matching a same-size, same-token FP16 LLaMA-style baseline in perplexity, with measured GPU memory 2.22 GB vs 7.89 GB and a 7 nm *arithmetic* energy model of \(71.4\times\) vs FP16 matmul (Horowitz-style coefficients). Those GPU and 7 nm figures are not COTS-phone RSS or battery. Sub-INT4 and MoE-on-phone stay **theater until measured** on the named device and backend.
+**Compression bound, not the phone stack.** BitNet b1.58 (Ma et al., 2024) trains ternary weights. At 3B, they report matching a same-size, same-token FP16 LLaMA-style baseline in perplexity, with measured GPU memory 2.22 GB vs 7.89 GB and a 7 nm *arithmetic* energy model of \(71.4\times\) vs FP16 matmul (Horowitz-style coefficients). Those GPU and 7 nm figures are not COTS-phone RSS or battery.[^bitnet-2b4t] Sub-INT4 and MoE-on-phone stay **theater until measured** on the named device and backend.
 
 **COTS execution, thermal, energy.** MELT (Laskaridis et al., 2024) is the systematic COTS study: TinyLlama 1.1B through Llama-2 7B/13B and Gemma 2B/7B, on mid/high Android and iOS, with Monsoon energy traces. Findings we use as bounds:
 
@@ -100,7 +100,8 @@ This is not “smallest model that babels English.” TinyStories (Eldan and Li,
 ### 3.2 What the literature does and does not give
 
 - **Data dominates at small scale when the architecture is ordinary.** Phi-1 / “Textbooks Are All You Need” (Gunasekar et al., 2023) and Phi-3 (Abdin et al., 2024) locate the win in filtered plus synthetic textbook-quality data, not in a new layer type. That is why thesis A is primary.
-- **Architecture is not irrelevant under a storage cap.** MobileLLM finds that for sub-billion models, depth, embedding sharing, and grouped-query attention move zero-shot scores at fixed size (Liu et al., 2024). That supports treating architecture as *related*, not as the headline.
+- **Architecture is not irrelevant under a storage cap.** MobileLLM finds that for sub-billion models, depth, embedding sharing, and grouped-query attention move zero-shot scores at fixed size (Liu et al., 2024; ICML tables **125M / 350M**, +LS). That supports treating architecture as *related*, not as the headline.
+- **Sub-billion data prior.** SmolLM (Allal et al., 2024) is the published curated-corpus prior at **135M / 360M** (under 1B; plus a 1.7B sibling). Sit it next to MobileLLM: Liu et al. for the on-device *architecture* envelope; Allal et al. for *data* at sub-billion. Neither is a 50M multi-skill result; neither is a phone process-RSS measurement.
 - **Fixed-state inference is a real RSS lever.** RWKV (Peng et al., 2023) gives constant computational and memory complexity at inference, with models scaled to 14B and reported as on par with similar-size Transformers. Linear-time / constant-state families (RWKV; also Mamba, Gu and Dao, 2023) motivate a KV-vs-state axis. They do not, by themselves, produce a 50M multi-skill generalist.
 - **MMLU is the wrong primary at this scale.** Hendrycks et al. (2021) introduced MMLU as a 57-task 4-way exam; random is 25%. Their own GPT-3 size sweep shows models up to 13B near chance in the few-shot setting they report, with only the 175B model clearly off the floor. We therefore **reject MMLU as a primary metric under 300M**, and we do not use it at ~50M at all.
 
@@ -130,6 +131,8 @@ Literature gives the *shape*: KV grows with length (Pope et al., 2023; standard 
 This is the original object. It is a **protocol**, not a win.
 
 The Phi line showed that *textbook-quality* data can move small models (Gunasekar et al., 2023; Abdin et al., 2024). FineWeb-Edu (Penedo et al., 2024) showed that educational filtering of web text is a scalable cousin of that idea. Neither paper publishes an operational three-stratum recipe with in/out rules aimed at *master-of-none multi-skill* under a phone RSS cap. That recipe is ours to state and, later, to test.
+
+Lee et al. (2022) is the closest published *concept-curriculum* efficiency prior (concept-based curriculum masking; comparable BERT/GLUE at ~½ the MLM training cost). We cite it as **related** for CCR positioning. It is not a solved-analogy result and it is not a substitute for CCR: their object is an MLM masking schedule, not a three-stratum data recipe under a phone RSS cap.
 
 **Hypothesis (not a result).** Under a frozen \(\le\)30-item multi-strata eval and a pre-registered token budget, a ~50M model trained on CCR will beat a same-param, same-token Wikipedia/web control on **task_success**, and will not lose to that control on held-out perplexity by more than a pre-registered margin. We do not claim this without a run.
 
@@ -218,6 +221,7 @@ Do not start with A-only. Analogies without locked concepts are decoration.
 - Not “we filtered the web and called it textbooks.”
 - Not TinyStories (single restricted domain).
 - Not Phi’s private synthetic pipeline (we do not have it).
+- Not Lee et al.’s concept-based curriculum *masking* (related efficiency prior; different object).
 - Not a claim that quality data removes the need for scale in Claim P.
 
 ---
@@ -295,7 +299,9 @@ We do not claim, without a run:
 We **do** claim, as literature:
 
 - the Phi-3-mini 4-bit on-device existence point (Abdin et al., 2024)
-- the MobileLLM on-device size and DRAM-heuristic envelope (Liu et al., 2024)
+- the MobileLLM on-device size and DRAM-heuristic envelope (Liu et al., 2024), with ICML tables at **125M / 350M**
+- SmolLM’s **135M / 360M** curated-corpus prior at sub-billion (Allal et al., 2024)
+- Lee et al. (2022) as a *related* concept-curriculum efficiency prior — not as CCR, and not as analogy-solved
 - the BitNet 3B compression/quality bound on *GPU / energy models*, not phones (Ma et al., 2024)
 - the MELT / iPhone-7B COTS thermal-energy picture (Laskaridis et al., 2024; Çöplü et al., 2023)
 - that INT4 post-training quantization is a real, widely used method (Frantar et al., 2022; Lin et al., 2024)
@@ -308,3 +314,5 @@ We **do** claim, as literature:
 This repo, this season, is a paper repo. The code is a later instrument: a ~50M GPT vs H(AI)LP scaffold and optional trainers. The paper owns both claims, separately. The innovation is CCR as hypothesis and protocol.
 
 When a run happens, it edits [`eval-protocol.md`](eval-protocol.md) only to fill the first-run table, and it does not rewrite this abstract to absorb Claim P into Claim R.
+
+[^bitnet-2b4t]: Wang et al. (2025), *BitNet b1.58 2B4T* (arXiv:2504.12285), report **~0.4 GB** non-embedding memory as a tighter *compression* bound next to Ma et al. (2024). Still not COTS-phone process RSS.
